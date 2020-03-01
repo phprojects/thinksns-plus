@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -29,14 +29,13 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 class VerifyCodeTest extends TestCase
 {
     use DatabaseTransactions;
-
     protected $user;
 
     protected function setUp()
     {
         parent::setUp();
 
-        $this->user = factory(UserModel::class)->create(['phone' => '13730441111', 'email' => 'aaa@bbb.com']);
+        $this->user = factory(UserModel::class)->create(['phone' => '18908019700', 'email' => '182478966@qq.com']);
     }
 
     /**
@@ -47,6 +46,7 @@ class VerifyCodeTest extends TestCase
      */
     public function testGetVerifyCodeByPhone()
     {
+        $this->withoutExceptionHandling();
         $token = $this->guard()->login($this->user);
 
         $responseByPhone = $this->json('POST', 'api/v2/verifycodes?token='.$token, [
@@ -77,6 +77,7 @@ class VerifyCodeTest extends TestCase
      * Assert login response.
      *
      * @param $response
+     *
      * @return void
      */
     protected function assertLoginResponse($response)
@@ -91,7 +92,8 @@ class VerifyCodeTest extends TestCase
      *
      * @return \Illuminate\Contracts\Auth\Guard
      */
-    protected function guard(): Guard
+    protected function guard()
+    : Guard
     {
         return Auth::guard('api');
     }

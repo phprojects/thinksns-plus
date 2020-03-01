@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -22,16 +22,18 @@ namespace Zhiyi\Component\ZhiyiPlus\PlusComponentNews\API2\Controllers;
 
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Zhiyi\Plus\Services\Push;
 use Zhiyi\Plus\Models\Comment;
 use Zhiyi\Plus\Http\Controllers\Controller;
-use Zhiyi\Plus\Models\UserCount as UserCountModel;
+use Zhiyi\Plus\AtMessage\AtMessageHelperTrait;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentNews\Models\News;
+use Zhiyi\Plus\Notifications\Comment as CommentNotification;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentNews\Models\NewsPinned;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentNews\API2\Requests\StoreNewsComment;
 
 class CommentController extends Controller
 {
+    use AtMessageHelperTrait;
+
     /**
      * 发布资讯评论.
      *
@@ -58,42 +60,23 @@ class CommentController extends Controller
             $news->comments()->save($comment);
             $news->increment('comment_count', 1);
             $user->extra()->firstOrCreate([])->increment('comments_count', 1);
-            if ($news->user->id !== $user->id) {
-                // 增加资讯被评论未读数
-                $news->user->unreadCount()->firstOrCreate([])->increment('unread_comments_count', 1);
-                // 新, 1.8启用
-                $userCommentedCount = UserCountModel::firstOrNew([
-                    'type' => 'user-commented',
-                    'user_id' => $news->user->id,
-                ]);
-
-                $userCommentedCount->total += 1;
-                $userCommentedCount->save();
-                // 推送
-                app(Push::class)->push(sprintf('%s评论了你的资讯', $user->name), (string) $news->user->id, ['channel' => 'news:comment']);
-                unset($userCommentedCount);
-            }
         });
+
+        if ($news->user) {
+            $news->user->notify(new CommentNotification($comment, $user));
+        }
 
         if ($replyUser && $replyUser !== $user->id && $replyUser !== $news->user_id) {
             $replyUser = $user->newQuery()->where('id', $replyUser)->first();
-            // 增加资讯评论被回复的未读数
-            $replyUser->unreadCount()->firstOrCreate([])->increment('unread_comments_count', 1);
-            // 新, 1.8启用
-            $userCommentedCount = UserCountModel::firstOrNew([
-                'type' => 'user-commented',
-                'user_id' => $news->user->id,
-            ]);
-
-            $userCommentedCount->total += 1;
-            $userCommentedCount->save();
-            // 推送
-            app(Push::class)->push(sprintf('%s 回复了你的评论', $user->name), (string) $replyUser->id, ['channel' => 'news:comment-reply']);
-            unset($userCommentedCount);
+            if ($replyUser) {
+                $replyUser->notify(new CommentNotification($comment, $user));
+            }
         }
 
+        $this->sendAtMessage($comment->body, $user, $comment);
+
         return response()->json([
-            'message' => ['操作成功'],
+            'message' => '操作成功',
             'comment' => $comment,
         ])->setStatusCode(201);
     }
@@ -146,6 +129,8 @@ class CommentController extends Controller
             return $news->pinnedComments()
                 ->with(['user', 'reply'])
                 ->where('expires_at', '>', $dateTime)
+                ->orderBy('amount', 'desc')
+                ->orderBy('created_at', 'desc')
                 ->get();
         }
     }
@@ -163,7 +148,7 @@ class CommentController extends Controller
     {
         $user = $request->user();
         if ($comment->user_id !== $user->id) {
-            return response()->json(['message' => ['没有权限']], 403);
+            return response()->json(['message' => '没有权限'], 403);
         }
 
         $pinned = $pinnedModel->where('channel', 'news:comment')->where('raw', $comment->id)->where('state', 0)->first();

@@ -4,12 +4,12 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -28,7 +28,7 @@ return [
     | your application here. By default, Laravel is setup for SMTP mail.
     |
     | Supported: "smtp", "sendmail", "mailgun", "mandrill", "ses",
-    |            "sparkpost", "log", "array"
+    |            "sparkpost", "postmark", "log", "array"
     |
     */
 
@@ -135,5 +135,18 @@ return [
             resource_path('views/vendor/mail'),
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Log Channel
+    |--------------------------------------------------------------------------
+    |
+    | If you are using the "log" driver, you may specify the logging channel
+    | if you prefer to keep mail messages separate from other log entries
+    | for simpler reading. Otherwise, the default channel will be used.
+    |
+    */
+
+    'log_channel' => env('MAIL_LOG_CHANNEL'),
 
 ];

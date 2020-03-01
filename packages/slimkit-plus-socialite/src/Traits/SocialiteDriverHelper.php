@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,8 +21,7 @@ declare(strict_types=1);
 namespace SlimKit\PlusSocialite\Traits;
 
 use Closure;
-use RuntimeException;
-use Zhiyi\Plus\Models\CommonConfig;
+use function Zhiyi\Plus\setting;
 use Zhiyi\Plus\Models\User as UserModel;
 use GuzzleHttp\Client as GuzzleHttpClient;
 use SlimKit\PlusSocialite\Models\UserSocialite as UserSocialiteModel;
@@ -85,13 +84,7 @@ trait SocialiteDriverHelper
      */
     protected function getDefaultUserRole()
     {
-        $role = CommonConfig::byNamespace('user')
-            ->byName('default_role')
-            ->firstOr(function () {
-                throw new RuntimeException('Failed to get the defined user group.');
-            });
-
-        return $role->value;
+        return setting('user', 'register-role');
     }
 
     /**

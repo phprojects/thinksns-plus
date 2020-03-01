@@ -4,12 +4,12 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -30,8 +30,8 @@ class RoleUser extends Migration
     public function up()
     {
         Schema::create('role_user', function (Blueprint $table) {
-            $table->integer('user_id')->unsigned();
-            $table->integer('role_id')->unsigned();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedInteger('role_id');
 
             $table->foreign('user_id')->references('id')->on('users')
                 ->onUpdate('cascade')->onDelete('cascade');

@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -19,6 +19,8 @@ declare(strict_types=1);
  */
 
 namespace Zhiyi\Plus\Support;
+
+use Illuminate\Support\Str;
 
 abstract class PackageHandler
 {
@@ -28,7 +30,6 @@ abstract class PackageHandler
      * @var array
      */
     private static $handles = [];
-
     /**
      * The handler methods.
      *
@@ -50,8 +51,9 @@ abstract class PackageHandler
     /**
      * Register handler.
      *
-     * @param string $name
-     * @param PackageHandler|string $handler
+     * @param  string  $name
+     * @param  PackageHandler|string  $handler
+     *
      * @return void
      * @author Seven Du <shiweidu@outlook.com>
      */
@@ -63,33 +65,37 @@ abstract class PackageHandler
     /**
      * 转换处理方法名称为显示名称.
      *
-     * @param string $handle
+     * @param  string  $handle
+     *
      * @return string
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function formatHandleToDisplay(string $handle): string
+    public function formatHandleToDisplay(string $handle)
+    : string
     {
         if (strtolower(substr($handle, -6)) === 'handle') {
             $handle = substr($handle, 0, -6);
         }
 
-        return str_replace('_', '-', snake_case($handle));
+        return str_replace('_', '-', Str::snake($handle));
     }
 
     /**
      * 转换处理方法为类方法名称.
      *
-     * @param string $handle
+     * @param  string  $handle
+     *
      * @return string
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function formatHandleToMethod(string $handle): string
+    public function formatHandleToMethod(string $handle)
+    : string
     {
         if (strtolower(substr($handle, -6)) === 'handle') {
             $handle = substr($handle, 0, -6);
         }
 
-        return camel_case(str_replace('-', '_', $handle.'_handle'));
+        return Str::camel(str_replace('-', '_', $handle.'_handle'));
     }
 
     /**
@@ -98,13 +104,17 @@ abstract class PackageHandler
      * @return array
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function methods(): array
+    public function methods()
+    : array
     {
         if (! $this->methods) {
             $this->methods = [];
             foreach (get_class_methods($this) as $method) {
-                if (strtolower(substr($method, -6)) === 'handle' && substr($method, -7) === substr($method, -7, 1).'Handle') {
-                    array_push($this->methods, $this->formatHandleToDisplay($method));
+                if (strtolower(substr($method, -6)) === 'handle'
+                    && substr($method, -7) === substr($method, -7, 1).'Handle'
+                ) {
+                    array_push($this->methods,
+                        $this->formatHandleToDisplay($method));
                 }
             }
         }
@@ -115,8 +125,9 @@ abstract class PackageHandler
     /**
      *  Run handler.
      *
-     * @param \Illuminate\Console\Command $command
-     * @param string $handler
+     * @param  \Illuminate\Console\Command  $command
+     * @param  string  $handler
+     *
      * @return mixed
      * @author Seven Du <shiweidu@outlook.com>
      */

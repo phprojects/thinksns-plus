@@ -4,12 +4,12 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -86,12 +86,19 @@ return [
         'yunpian' => [
             'api_key' => null,
         ],
+
+        // 互亿无线
+        'huyi' => [
+            'api_id' => null,
+            'api_key' => null,
+        ],
     ],
 
     'gateway_aliases' => [
         'aliyun' => \Overtrue\EasySms\Gateways\AliyunGateway::class,
         'alidayu' => \Overtrue\EasySms\Gateways\AlidayuGateway::class,
         'yunpian' => \Overtrue\EasySms\Gateways\YunpianGateway::class,
+        'huyi' => \Overtrue\EasySms\Gateways\HuyiGateway::class,
     ],
 
     /*
@@ -116,6 +123,9 @@ return [
                 ':code' => 'code',
             ],
             'yunpian' => [
+                'content' => null,
+            ],
+            'huyi' => [
                 'content' => null,
             ],
         ],

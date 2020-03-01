@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,6 +21,8 @@ declare(strict_types=1);
 namespace Zhiyi\Plus\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Certification extends Model
 {
@@ -54,7 +56,22 @@ class Certification extends Model
      *
      * @var array
      */
-    protected $with = ['category', 'user'];
+    protected $with = ['category'];
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = ['certification_name', 'user_id', 'data', 'status'];
+
+    public static function boot()
+    {
+        parent::boot();
+        static::addGlobalScope('category', function (Builder $builder) {
+            $builder->with('category');
+        });
+    }
 
     /**
      * Get icon url.
@@ -103,7 +120,7 @@ class Certification extends Model
     /**
      * Has certification caregory.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     * @return HasOne
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function category()

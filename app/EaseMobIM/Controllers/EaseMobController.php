@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -23,6 +23,7 @@ namespace Zhiyi\Plus\EaseMobIm;
 use GuzzleHttp\Client;
 use Zhiyi\Plus\Models\User;
 use Illuminate\Http\Request;
+use function Zhiyi\Plus\setting;
 
 class EaseMobController
 {
@@ -49,23 +50,28 @@ class EaseMobController
 
     protected function getConfig($callback)
     {
-        $this->open = config('easemob.open');
-        $this->client_id = config('easemob.client_id');
-        $this->client_secret = config('easemob.client_secret');
+        $settings = setting('user', 'vendor:easemob', [
+            'open' => false,
+            'appKey' => '',
+            'clientId' => '',
+            'clientSecret' => '',
+            'registerType' => 0,
+        ]);
+        $this->open = $settings['open'];
+        $this->client_id = $settings['clientId'];
+        $this->client_secret = $settings['clientSecret'];
+        $this->register_type = $settings['registerType'];
 
-        if (! $this->open || ! $this->client_id || ! $this->client_secret) {
+        if (! $this->open || ! $this->client_id || ! $this->client_secret || ! $settings['appKey']) {
             return response()->json([
-                'message' => ['环信未配置'],
-            ])->setStatusCode(201);
+                'message' => ['环信未开启或者配置信息不全'],
+            ])->setStatusCode(500);
         }
-        $this->open = config('easemob.open');
-        $this->client_id = config('easemob.client_id');
-        $this->client_secret = config('easemob.client_secret');
+
         // 应用标识
-        $app_key = explode('#', config('easemob.app_key'));
-        $this->org_name = $app_key[0];
-        $this->app_name = $app_key[1];
-        $this->register_type = config('easemob.register_type');
+        $appKey = explode('#', $settings['appKey']);
+        $this->org_name = $appKey[0] ?? '';
+        $this->app_name = $appKey[1] ?? '';
         if (! empty($this->org_name) && ! empty($this->app_name)) {
             $this->url = 'https://a1.easemob.com/'.$this->org_name.'/'.$this->app_name.'/';
         }

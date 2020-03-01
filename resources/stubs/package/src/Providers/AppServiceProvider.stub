@@ -10,7 +10,7 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     /**
-     * Boorstrap the service provider.
+     * Bootstrap the service provider.
      *
      * @return void
      */
@@ -29,11 +29,6 @@ class AppServiceProvider extends ServiceProvider
         $this->publishes([
             $this->app->make('path.{name}.assets') => $this->app->publicPath().'/assets/{name}',
         ], '{name}-public');
-
-        // Publish config.
-        $this->publishes([
-            $this->app->make('path.{name}.config').'/{name}.php' => $this->app->configPath('{name}.php'),
-        ], '{name}-config');
     }
 
     /**
@@ -46,17 +41,11 @@ class AppServiceProvider extends ServiceProvider
         // Bind all of the package paths in the container.
         $this->bindPathsInContainer();
 
-        // Merge config.
-        $this->mergeConfigFrom(
-            $this->app->make('path.{name}.config').'/{name}.php',
-            '{name}'
-        );
-
         // register cntainer aliases
         $this->registerCoreContainerAliases();
 
         // Register singletons.
-        $this->registerSingletions();
+        $this->registerSingletons();
 
         // Register Plus package handlers.
         $this->registerPackageHandlers();
@@ -72,7 +61,6 @@ class AppServiceProvider extends ServiceProvider
         foreach ([
             'path.{name}' => $root = dirname(dirname(__DIR__)),
             'path.{name}.assets' => $root.'/assets',
-            'path.{name}.config' => $root.'/config',
             'path.{name}.database' => $database = $root.'/database',
             'path.{name}.resources' => $resources = $root.'/resources',
             'path.{name}.lang' => $resources.'/lang',
@@ -89,7 +77,7 @@ class AppServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    protected function registerSingletions()
+    protected function registerSingletons()
     {
         // Owner handler.
         $this->app->singleton('{name}:handler', function () {

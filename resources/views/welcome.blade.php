@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ app()->getLocale() }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -113,7 +113,7 @@
         @else
             <div class="user">
                 @if (Auth::user()->avatar)
-                    <img class="avatar" src="{{ Auth::user()->avatar }}" alt="{{ Auth::user()->name }}" />
+                    <img class="avatar" src="{{ Auth::user()->avatar->url() }}" alt="{{ Auth::user()->name }}" />
                 @else
                     <span class="name">Hi, {{ Auth::user()->name }}</span>
                 @endif
@@ -133,7 +133,8 @@
 
         <div class="links">
             <a href="{{ url('/admin') }}">Administration</a>
-            <a href="https://slimkit.github.io/plus-docs/">Documentation</a>
+            <a href="{{ url('/telescope') }}">Telescope</a>
+            <a href="https://slimkit.github.io/plus/">Documentation</a>
             <a href="https://github.com/slimkit/thinksns-plus">GitHub</a>
         </div>
     </div>

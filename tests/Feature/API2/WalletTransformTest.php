@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -27,7 +27,6 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 class WalletTransformTest extends TestCase
 {
     use DatabaseTransactions;
-
     protected $user;
 
     protected function setUp()
@@ -35,7 +34,7 @@ class WalletTransformTest extends TestCase
         parent::setUp();
 
         $this->user = factory(UserModel::class)->create();
-        $this->user->newWallet()->create(['balance' => 999999, 'total_income' => 0, 'total_expenses' => 0]);
+        $this->user->newWallet()->update(['balance' => 999999]);
     }
 
     /**
@@ -46,7 +45,8 @@ class WalletTransformTest extends TestCase
      */
     public function testTransfer()
     {
-        $response = $this->actingAs($this->user, 'api')->json('POST', '/api/v2/plus-pay/transform', ['amount' => 2121]);
+        $response = $this->actingAs($this->user, 'api')
+            ->json('POST', '/api/v2/plus-pay/transform', ['amount' => 2121]);
 
         $response->assertStatus(201);
     }

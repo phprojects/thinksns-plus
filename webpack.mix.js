@@ -1,5 +1,5 @@
-let mix = require('laravel-mix');
-let path = require('path');
+let mix = require('laravel-mix')
+let path = require('path')
 
 /*
  |--------------------------------------------------------------------------
@@ -12,13 +12,13 @@ let path = require('path');
  |
  */
 
-mix.setPublicPath(path.join('public', 'assets'));
-mix.setResourceRoot('/assets/');
-mix.sourceMaps(! mix.inProduction());
-mix.disableNotifications();
+mix.setPublicPath(path.join('public', 'assets'))
+mix.setResourceRoot('/assets/')
+mix.sourceMaps(!mix.inProduction())
+mix.disableNotifications()
 
 if (mix.config.hmr === true) {
-  mix.setResourceRoot('/');
+  mix.setResourceRoot('/')
 }
 
 /*
@@ -30,9 +30,8 @@ if (mix.config.hmr === true) {
  |
  */
 
-mix.sass('resources/assets/sass/bootstrap.scss', path.join('public', 'assets', 'css'))
-   .js('resources/assets/js/bootstrap.js', path.join('public', 'assets', 'js'))
-
+mix.sass('resources/sass/bootstrap.scss', path.join('public', 'assets', 'css')).
+  js('resources/js/bootstrap.js', path.join('public', 'assets', 'js'))
 
 /*
  |--------------------------------------------------------------------------
@@ -43,16 +42,4 @@ mix.sass('resources/assets/sass/bootstrap.scss', path.join('public', 'assets', '
  |
  */
 
-mix.js('resources/assets/admin', path.join('public', 'assets', 'js'));
-
-/*
- |--------------------------------------------------------------------------
- | Installer 打包
- |--------------------------------------------------------------------------
- |
- | element-ui
- |
- */
-
-mix.js('resources/assets/installer/main.js', path.join('public', 'assets', 'js', 'installer.js'));
-mix.copy('resources/assets/installer/logo.png', path.join('public', 'assets', 'installer', 'logo.png'));
+mix.js('resources/assets/admin', path.join('public', 'assets', 'js'))

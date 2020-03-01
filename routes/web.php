@@ -4,17 +4,19 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
  * +----------------------------------------------------------------------+
  */
+
+use Illuminate\Support\Arr;
 
 if (! Route::has('home')) {
     /**
@@ -22,7 +24,7 @@ if (! Route::has('home')) {
      *
      * @var \Illuminate\Routing\Route
      */
-    $route = array_get(Route::getRoutes()->get('GET'), '/');
+    $route = Arr::get(Route::getRoutes()->get('GET'), '/');
 
     // Not defined "/" route,
     // Create a default "/" route.
@@ -40,6 +42,10 @@ if (! Route::has('login')) {
 
 if (! Route::has('logout')) {
     Route::any('auth/logout', 'Auth\\LoginController@logout')->name('logout');
+}
+
+if (! Route::has('redirect')) {
+    Route::get('/redirect', 'HomeController@redirect')->name('redirect');
 }
 
 Route::post('/auth/login', 'Auth\\LoginController@login');

@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -23,7 +23,6 @@ namespace Zhiyi\Component\ZhiyiPlus\PlusComponentNews\API2\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentNews\Models\News;
-use Zhiyi\Component\ZhiyiPlus\PlusComponentNews\Models\NewsCate;
 
 class NewsController extends Controller
 {
@@ -34,51 +33,64 @@ class NewsController extends Controller
      * @param  Request $request
      * @param  News    $newsModel
      * @return json
+     * @throws \Throwable
      */
     public function index(Request $request, News $newsModel)
     {
-        $user = $request->user('api')->id ?? 0;
-        $limit = $request->query('limit', 15);
-        $after = $request->query('after', 0);
-        $key = $request->query('key');
-        $is_recommend = $request->query('recommend');
-        $cate_id = $request->query('cate_id');
+        $userId = $request->user('api')->id ?? 0;
+        $id = array_values(
+            array_filter(
+                explode(',', $request->query('id', ''))
+            )
+        );
+        $news = $newsModel
+            ->query()
+            ->orderBy('id', 'desc')
+            ->when(! empty($id), function ($query) use ($id) {
+                return $query->whereIn('id', $id);
+            })
+            ->when(empty($id), function ($query) use ($request) {
+                return $query
+                    ->when($recommend = (int) $request->query('recommend'), function ($query) use ($recommend) {
+                        return $query->where('is_recommend', $recommend);
+                    })
+                    ->when($cateId = $request->query('cate_id'), function ($query) use ($cateId) {
+                        return $query->where('cate_id', $cateId);
+                    })
+                    ->when($after = $request->query('after', 0), function ($query) use ($after) {
+                        return $query->where('id', '<', $after);
+                    })
+                    ->when($key = $request->query('key'), function ($query) use ($key) {
+                        return $query->where('title', 'like', '%'.$key.'%');
+                    })
+                    ->limit($request->query('limit', 15));
+            })
+            ->where('audit_status', 0)
+            ->whereDoesntHave('blacks', function ($query) use ($userId) {
+                return $query->where('user_id', $userId);
+            })
+            ->get();
 
-        $news = $newsModel->where('audit_status', 0)
-        ->whereDoesntHave('blacks', function ($query) use ($user) {
-            $query->where('user_id', $user);
-        })
-        ->when($is_recommend, function ($query) use ($is_recommend) {
-            return $query->where('is_recommend', $is_recommend);
-        })
-        ->when($cate_id, function ($query) use ($cate_id) {
-            return $query->where('cate_id', $cate_id);
-        })->when($after, function ($query) use ($after) {
-            return $query->where('id', '<', $after);
-        })->when($key, function ($query) use ($key) {
-            return $query->where('title', 'like', '%'.$key.'%');
-        })->take($limit)->select(['id', 'title', 'subject', 'created_at', 'updated_at', 'storage', 'cate_id', 'from', 'author', 'user_id', 'hits', 'text_content'])
-        ->orderBy('id', 'desc')->get();
-
-        $datas = $newsModel->getConnection()->transaction(function () use ($news, $user) {
-            return $news->each(function ($data) use ($user) {
-                $data->has_collect = $data->collected($user);
-                $data->has_like = $data->liked($user);
+        $data = $newsModel->getConnection()->transaction(function () use ($news, $userId) {
+            return $news->each(function ($data) use ($userId) {
+                $data->has_collect = $data->collected($userId);
+                $data->has_like = $data->liked($userId);
                 unset($data->pinned);
             });
         });
 
-        return response()->json($datas, 200);
+        return response()->json($data, 200);
     }
 
     /**
      * 获取一个分类的置顶资讯.
      *
      * @author bs<414606094@qq.com>
-     * @param  Request  $request
-     * @param  NewsCate $cate
-     * @param  Carbon   $datetime
+     * @param  Request $request
+     * @param News     $newsModel
+     * @param  Carbon  $datetime
      * @return json
+     * @throws \Throwable
      */
     public function pinned(Request $request, News $newsModel, Carbon $datetime)
     {
@@ -92,7 +104,9 @@ class NewsController extends Controller
             return $query->where('news.cate_id', $cate);
         })
         ->select(['news.id', 'news.title', 'news.subject', 'news.created_at', 'news.updated_at', 'news.storage', 'news.cate_id', 'news.from', 'news.author', 'news.user_id', 'news.hits', 'news.text_content'])
-        ->orderBy('id', 'desc')->get();
+        ->orderBy('news_pinneds.amount', 'desc')
+        ->orderBy('news_pinneds.created_at', 'desc')
+        ->get();
 
         return response()->json($newsModel->getConnection()->transaction(function () use ($news, $user) {
             return $news->each(function ($data) use ($user) {
@@ -109,7 +123,9 @@ class NewsController extends Controller
      * @author bs<414606094@qq.com>
      * @param  Request $request
      * @param  News    $news
+     * @param Carbon   $datetime
      * @return json
+     * @throws \Throwable
      */
     public function detail(Request $request, News $news, Carbon $datetime)
     {
@@ -125,7 +141,7 @@ class NewsController extends Controller
             $news->has_collect = $news->collected($user);
             $news->has_like = $news->liked($user);
             $news->is_pinned = ! (bool) $news->pinned()->where('state', 1)->where('expires_at', '>', $datetime)->get()->isEmpty();
-            $news->addHidden('pinned');
+            $news->addHidden(['images', 'pinned']);
 
             return $news;
         });
@@ -140,6 +156,7 @@ class NewsController extends Controller
      * @param  Request $request
      * @param  News    $news
      * @return json
+     * @throws \Throwable
      */
     public function correlation(Request $request, News $news)
     {

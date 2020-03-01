@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -22,8 +22,7 @@ namespace Zhiyi\Plus\Http\Controllers\APIs\V2;
 
 use Illuminate\Http\Request;
 use Zhiyi\Plus\Models\User as UserModel;
-use Zhiyi\Plus\Models\UserCount as UserCountModel;
-use Zhiyi\Plus\Models\UserFollow as UserFollowModel;
+use Zhiyi\Plus\Notifications\Follow as FollowNotification;
 use Zhiyi\Plus\Models\VerificationCode as VerificationCodeModel;
 use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
 
@@ -45,6 +44,7 @@ class CurrentUserController extends Controller
         $user->makeVisible(['phone', 'email']);
         $friends_count = $user->mutual()->get()->count();
         $user->friends_count = $friends_count;
+        $user->initial_password = (bool) $user->password;
 
         return $response->json($user, 200);
     }
@@ -65,6 +65,8 @@ class CurrentUserController extends Controller
             'bio' => ['nullable', 'string'],
             'sex' => ['nullable', 'numeric', 'in:0,1,2'],
             'location' => ['nullable', 'string'],
+            'avatar' => ['nullable', 'string', 'regex:/public:(.+)/is'],
+            'bg' => ['nullable', 'string', 'regex:/public:(.+)/is'],
         ];
         $messages = [
             'name.string' => '用户名只能是字符串',
@@ -74,6 +76,8 @@ class CurrentUserController extends Controller
             'sex.numeric' => '发送的性别数据异常',
             'sex.in' => '发送的性别数据非法',
             'location.string' => '地区数据异常',
+            'avatar.regex' => '头像错误',
+            'bg.regex' => '背景图片错误',
         ];
         $this->validate($request, $rules, $messages);
 
@@ -83,10 +87,10 @@ class CurrentUserController extends Controller
         if ($target) {
             return $response->json(['name' => ['用户名已被使用']], 422);
         }
-
-        foreach ($request->only(['name', 'bio', 'sex', 'location']) as $key => $value) {
-            if (isset($value)) {
-                $user->$key = $value;
+        $fields = ['name', 'bio', 'sex', 'location', 'avatar', 'bg'];
+        foreach ($fields as $field) {
+            if ($request->request->has($field)) {
+                $user->{$field} = $request->input($field);
             }
         }
 
@@ -150,28 +154,6 @@ class CurrentUserController extends Controller
     }
 
     /**
-     * Update background image of the authenticated user.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param \Illuminate\Contracts\Routing\ResponseFactory $response
-     * @return mixed
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    public function uploadBgImage(Request $request, ResponseFactoryContract $response)
-    {
-        $this->validate($request, ['image' => ['required', 'image']], [
-            'image.required' => '请上传图片',
-            'image.image' => '上传的文件必须是图像',
-        ]);
-
-        $image = $request->file('image');
-
-        return $request->user()->storeAvatar($image, 'user-bg')
-            ? $response->make('', 204)
-            : $response->json(['message' => ['上传失败']], 500);
-    }
-
-    /**
      * Show user followers.
      *
      * @param \Illuminate\Http\Request $request
@@ -186,6 +168,7 @@ class CurrentUserController extends Controller
         $offset = $request->query('offset', 0);
 
         $followers = $user->followers()
+            ->with('extra')
             ->offset($offset)
             ->limit($limit)
             ->get();
@@ -216,6 +199,7 @@ class CurrentUserController extends Controller
         $offset = $request->query('offset', 0);
 
         $followings = $user->followings()
+            ->with('extra')
             ->offset($offset)
             ->limit($limit)
             ->get();
@@ -249,23 +233,16 @@ class CurrentUserController extends Controller
         } elseif ($user->hasFollwing($target)) {
             return response()->json(['message' => ['非法的操作']], 422);
         }
-        $userFollowingCount = UserCountModel::firstOrNew([
-            'type' => 'user-following',
-            'user_id' => $target->id,
-        ]);
 
-        return $user
-            ->getConnection()
-            ->transaction(function () use ($user, $target, $userFollowingCount) {
-                $user->followings()->attach($target);
-                $user->extra()->firstOrCreate([])->increment('followings_count', 1);
-                $target->extra()->firstOrCreate([])->increment('followers_count', 1);
+        $user->getConnection()->transaction(function () use ($user, $target) {
+            $user->followings()->attach($target);
+            $user->extra()->firstOrCreate([])->increment('followings_count', 1);
+            $target->extra()->firstOrCreate([])->increment('followers_count', 1);
+        });
 
-                $userFollowingCount->total += 1;
-                $userFollowingCount->save();
+        $target->notify(new FollowNotification($user));
 
-                return response('', 204);
-            });
+        return response('', 204);
     }
 
     /**
@@ -279,33 +256,13 @@ class CurrentUserController extends Controller
     public function detachFollowingUser(Request $request, UserModel $target)
     {
         $user = $request->user();
+        $user->getConnection()->transaction(function () use ($user, $target) {
+            $user->followings()->detach($target);
+            $user->extra()->decrement('followings_count', 1);
+            $target->extra()->decrement('followers_count', 1);
+        });
 
-        $userFollowingCount = UserCountModel::firstOrNew([
-            'type' => 'user-following',
-            'user_id' => $target->id,
-        ]);
-
-        $userFollowing = UserFollowModel::where('user_id', $user->id)
-            ->where('target', $target->id)
-            ->first();
-
-        return $user
-            ->getConnection()
-            ->transaction(function () use ($user, $target, $userFollowingCount, $userFollowing) {
-                $user->followings()->detach($target);
-                $user->extra()->decrement('followings_count', 1);
-                $target->extra()->decrement('followers_count', 1);
-
-                if ($userFollowing &&
-                    $userFollowingCount->total &&
-                    $userFollowing->updated_at->gte($userFollowingCount->read_at)
-                ) {
-                    $userFollowingCount->total -= 1;
-                    $userFollowingCount->save();
-                }
-
-                return response('', 204);
-            });
+        return response('', 204);
     }
 
     /**

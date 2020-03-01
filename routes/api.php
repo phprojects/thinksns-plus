@@ -4,12 +4,12 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -51,6 +51,14 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
     $api->post('/plus-pay/webhooks', API2\NewWalletRechargeController::class.'@webhook');
 
     $api->post('/currency/webhooks', API2\CurrencyRechargeController::class.'@webhook');
+
+    // 钱包充值验证
+    $api->post('/alipay/notify', API2\PayController::class.'@alipayNotify');
+    $api->post('/wechat/notify', API2\PayController::class.'@wechatNotify');
+
+    // 积分充值验证
+    $api->post('/alipayCurrency/notify', API2\CurrencyPayController::class.'@alipayNotify');
+    $api->post('/wechatCurrency/notify', API2\CurrencyPayController::class.'@wechatNotify');
     /*
     | 应用启动配置.
     */
@@ -63,12 +71,6 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
         $api->any('logout', API2\AuthController::class.'@logout');
         $api->any('refresh', API2\AuthController::class.'@refresh');
     });
-
-    // Create user authentication token
-    $api->post('/tokens', API2\TokenController::class.'@store');
-
-    // Refresh token
-    $api->patch('/tokens/{token}', API2\TokenController::class.'@refresh');
 
     // Search location.
     $api->get('/locations/search', API2\LocationController::class.'@search');
@@ -86,6 +88,9 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
 
     // Get a html for about us.
     $api->get('/aboutus', API2\SystemController::class.'@about');
+
+    // 注册协议
+    $api->get('/agreement', API2\SystemController::class.'@agreement');
 
     // Get all tags.
     // @Get /api/v2/tags
@@ -137,7 +142,7 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
 
     tap($api->get('/files/{fileWith}', API2\FilesController::class.'@show'), function ($route) {
         $route->setAction(array_merge($route->getAction(), [
-            'middleware' => 'bindings',
+            'middleware' => ['cors-should', 'bindings'],
         ]));
     });
 
@@ -193,16 +198,6 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
          */
 
         $api->get('/{user}', API2\UserController::class.'@show');
-
-        /*
-        | 用户头像
-         */
-
-        tap($api->get('/{user}/avatar', API2\UserAvatarController::class.'@show'), function ($route) {
-            $route->setAction(array_merge($route->getAction(), [
-                'middleware' => 'bindings',
-            ]));
-        });
 
         // 获取用户关注者
         $api->get('/{user}/followers', API2\UserFollowController::class.'@followers');
@@ -285,50 +280,11 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
                 $api->get('/', API2\UserCertificationController::class.'@show');
             });
 
-            /*
-            | 用户通知相关
-             */
-
-            $api->group(['prefix' => 'notifications'], function (RouteContract $api) {
-
-                /*
-                | 用户通知列表
-                 */
-
-                $api->get('/', API2\UserNotificationController::class.'@index');
-
-                /*
-                | 通知详情
-                 */
-
-                $api->get('/{notification}', API2\UserNotificationController::class.'@show');
-
-                /*
-                | 阅读通知，可以使用资源模型阅读单条，也可以使用资源组形式，阅读标注多条.
-                 */
-
-                $api->patch('/{notification?}', API2\UserNotificationController::class.'@markAsRead');
-
-                /*
-                    标记所有未读消息为已读
-                 */
-                $api->put('/all', API2\UserNotificationController::class.'@markAllAsRead');
-            });
-
             // send a feedback.
             $api->post('/feedback', API2\SystemController::class.'@createFeedback');
 
             // get a list of system conversation.
             $api->get('/conversations', API2\SystemController::class.'@getConversations');
-
-            /*
-            | 更新当前用户头像
-             */
-
-            $api->post('/avatar', API2\UserAvatarController::class.'@update');
-
-            // Update background image of the authenticated user.
-            $api->post('/bg', API2\CurrentUserController::class.'@uploadBgImage');
 
             /*
             | 用户关注
@@ -376,10 +332,28 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             });
 
             // 打赏用户
-            $api->post('/{target}/rewards', API2\UserRewardController::class.'@store');
+            tap($api->post('/{target}/rewards', API2\UserRewardController::class.'@store'), function ($route) {
+                $route->setAction(array_merge($route->getAction(), [
+                    'middleware' => [
+                        'cors-should',
+                        'bindings',
+                        'throttle:5,0.1',
+                        'auth:api',
+                    ],
+                ]));
+            });
 
             // 新版打赏用户
-            $api->post('/{target}/new-rewards', API2\NewUserRewardController::class.'@store');
+            tap($api->post('/{target}/new-rewards', API2\NewUserRewardController::class.'@store'), function ($route) {
+                $route->setAction(array_merge($route->getAction(), [
+                    'middleware' => [
+                        'cors-should',
+                        'bindings',
+                        'throttle:5,0.1',
+                        'auth:api',
+                    ],
+                ]));
+            });
 
             /*
              * 解除手机号码绑定.
@@ -412,13 +386,6 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
         */
 
         $api->group(['prefix' => 'wallet'], function (RouteContract $api) {
-
-            /*
-            | 获取钱包配置信息
-             */
-
-            $api->get('/', API2\WalletConfigController::class.'@show');
-
             /*
             | 获取提现记录
              */
@@ -428,7 +395,16 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             | 发起提现申请
              */
 
-            $api->post('/cashes', API2\WalletCashController::class.'@store');
+            tap($api->post('/cashes', API2\WalletCashController::class.'@store'), function ($route) {
+                $route->setAction(array_merge($route->getAction(), [
+                    'middleware' => [
+                        'cors-should',
+                        'bindings',
+                        'throttle:5,0.1',
+                        'auth:api',
+                    ],
+                ]));
+            });
 
             /*
             | 充值钱包余额
@@ -449,6 +425,20 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             $api->get('/charges/{charge}', API2\WalletChargeController::class.'@show');
         });
 
+        // 新版支付
+        $api->group(['prefix' => 'walletRecharge'], function (RouteContract $api) {
+            // 申请凭据入口
+            $api->post('/orders', API2\PayController::class.'@entry');
+
+            // 手动检测支付宝订单的支付状态
+            $api->post('/checkOrders', API2\PayController::class.'@checkAlipayOrder');
+        });
+
+        $api->group(['prefix' => 'currencyRecharge'], function (RouteContract $api) {
+            $api->post('/orders', API2\CurrencyPayController::class.'@entry');
+            $api->post('/checkOrders', API2\CurrencyPayController::class.'@checkAlipayOrder');
+        });
+
         // 新版钱包
         $api->group(['prefix' => 'plus-pay'], function (RouteContract $api) {
 
@@ -456,7 +446,16 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             $api->get('/cashes', API2\NewWalletCashController::class.'@show');
 
             // 发起提现申请
-            $api->post('/cashes', API2\NewWalletCashController::class.'@store');
+            tap($api->post('/cashes', API2\NewWalletCashController::class.'@store'), function ($route) {
+                $route->setAction(array_merge($route->getAction(), [
+                    'middleware' => [
+                        'cors-should',
+                        'bindings',
+                        'throttle:5,0.1',
+                        'auth:api',
+                    ],
+                ]));
+            });
 
             // 发起充值
             $api->post('/recharge', API2\NewWalletRechargeController::class.'@store');
@@ -468,10 +467,28 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             $api->get('/orders/{order}', API2\NewWalletRechargeController::class.'@retrieve');
 
             // 转账
-            $api->post('/transfer', API2\TransferController::class.'@transfer');
+            tap($api->post('/transfer', API2\TransferController::class.'@transfer'), function ($route) {
+                $route->setAction(array_merge($route->getAction(), [
+                    'middleware' => [
+                        'cors-should',
+                        'bindings',
+                        'throttle:5,0.1',
+                        'auth:api',
+                    ],
+                ]));
+            });
 
             // 转换积分
-            $api->post('/transform', API2\NewWalletRechargeController::class.'@transform');
+            tap($api->post('/transform', API2\NewWalletRechargeController::class.'@transform'), function ($route) {
+                $route->setAction(array_merge($route->getAction(), [
+                    'middleware' => [
+                        'cors-should',
+                        'bindings',
+                        'throttle:5,0.1',
+                        'auth:api',
+                    ],
+                ]));
+            });
         });
 
         /*
@@ -538,6 +555,7 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
 
             // 获取指定群组信息
             $api->get('/group', EaseMobIm\GroupController::class.'@getGroup');
+            $api->get('/groups', EaseMobIm\GroupController::class.'@newGetGroup');
 
             // 获取群头像
             $api->get('/group/face', EaseMobIm\GroupController::class.'@getGroupFace');
@@ -554,10 +572,6 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
 
         // 积分部分
         $api->group(['prefix' => 'currency'], function (RouteContract $api) {
-
-            // 获取积分配置
-            $api->get('/', API2\CurrencyConfigController::class.'@show');
-
             // 积分流水
             $api->get('/orders', API2\CurrencyRechargeController::class.'@index');
 
@@ -583,9 +597,7 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             $api->get('/apple-iap/products', API2\CurrencyApplePayController::class.'@productList');
 
             // 积分商城（待开发）
-            $api->get('/shop', function () {
-                return view('currency-developing');
-            });
+            $api->view('/show', 'currency-developing');
         });
     });
 
@@ -598,4 +610,191 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
      * 重置未读信息
      */
     $api->patch('/user/counts', \Zhiyi\Plus\API2\Controllers\UserCountsController::class.'@reset');
+
+    // Feed group
+    // @Route /api/v2/feed
+    $api->group(['prefix' => 'feed'], function (RouteContract $api) {
+        // Feed Topics Group
+        // @Route /api/v2/feed/topics
+        $api->group(['prefix' => 'topics'], function (RouteContract $api) {
+            /*
+             * Topic Index
+             *
+             * @Get /api/v2/feed/topics
+             * @Param::query {q} Search topic name keyword.
+             * @Param::query {limit} Featch data limit.
+             * @Param::query {index} Featch data start index.
+             * @Param::query {direction} Can be one of `asc` or `desc`.
+             * @Param::query('only', 'string', 'The value is `hot`')
+             * @Response::header('Status', 200, 'OK')
+             * @Response::json('<pre>
+             *  [{
+             *   "id": 1,        // Topic ID
+             *   "name": "Plus", // Topic name
+             *   "logo": 2,      // Topic logo, file with ID
+             *   "created_at": "2018-07-23T15:04:23Z" // Topic created datetime
+             *  }]
+             *  </pre>')
+             */
+            $api->get('', \Zhiyi\Plus\API2\Controllers\Feed\Topic::class.'@index');
+
+            /*
+             * Create an topic
+             *
+             * @Post /api/v2/feed/topics
+             * @Param::input('name', 'string', 'The name of the topic.')
+             * @Param::input('desc', 'string', 'The desc of the topic.')
+             * @Param::input('logo', 'integer', 'The topic logo file with     ID.')
+             * @Response::header('Status', 201, 'Created')
+             * @Response::json('<pre>
+             * {
+             *     "id": 2 // Created topic id
+             * }
+             * </pre>')
+             */
+            $api->post('', \Zhiyi\Plus\API2\Controllers\Feed\Topic::class.'@create');
+
+            /*
+             * Edit an topic.
+             *
+             * @Patch /api/v2/feed/topics/:topicID
+             * @Param::input('desc', 'string', 'The desc of the topic')
+             * @Param::input('logo', 'integer', 'The topic logo file with ID')
+             * @Response::header('Status', 204, 'No Content')
+             */
+            $api->patch('{topic}', \Zhiyi\Plus\API2\Controllers\Feed\Topic::class.'@update');
+
+            /*
+             * Get a single topic.
+             *
+             * @Get /api/v2/feed/topics/:topicID
+             * @Response::header('Status', 200, 'OK')
+             */
+            $api->get('{topic}', \Zhiyi\Plus\API2\Controllers\Feed\Topic::class.'@show');
+
+            /*
+             * List feeds for a topic.
+             *
+             * @Get /api/v2/feed/topics/:topicID/feeds
+             * @Param::query('limit', 'integer', 'The data limit, default `15`.')
+             * @Param::query('index', 'integer', 'fetch data start index')
+             * @Param::query('direction', 'string', 'Can be one of `asc` or `desc`.')
+             * @Response::header('Status', 200, 'OK')
+             * @Response::json('<pre>
+             * [{
+             *     ""
+             * }]
+             * </pre>')
+             */
+            $api->get('{topic}/feeds', Zhiyi\Plus\API2\Controllers\Feed\TopicFeed::class);
+
+            /*
+             *
+             * List participants for a topic.
+             *
+             * @Get /api/v2/feed/topic/:topicID/participants
+             * @Param::query('limit', 'integer', 'The data limit, default `15`.')
+             * @Param::query('offset', 'integer', 'The data offset, default `0`.')
+             * @Response::header('Status', 200, 'OK')
+             * @Response::json('<pre>
+             * [2, 3, 4, 5]
+             * </pre>')
+             */
+            $api->get('{topic}/participants', \Zhiyi\Plus\API2\Controllers\Feed\TopicParticipant::class.'@index');
+        });
+    });
+
+    /*
+     * Follow a feed topic.
+     *
+     * @Put /api/v2/user/feed-topics/:topicID
+     * @Response::header('Status', 204, 'No Content')
+     */
+    $api->put('user/feed-topics/{topicID}', \Zhiyi\Plus\API2\Controllers\Feed\TopicFollow::class.'@follow');
+
+    /*
+     * Unfollow a feed topic
+     *
+     * @Delete /api/v2/user/feed-topics/:topicID
+     * @Response::header('Status', 204, 'No Content')
+     */
+    $api->delete('user/feed-topics/{topicID}', \Zhiyi\Plus\API2\Controllers\Feed\TopicFollow::class.'@unfollow');
+
+    /*
+     * Report a feed topic.
+     *
+     * @Put /api/v2/user/report-feed-topics/:topicID
+     * @Patam::query('message', 'string', 'Report the feed topic message.')
+     * @Response::header('Status', 204, 'No Content')
+     */
+    $api->put('user/report-feed-topics/{topic}', \Zhiyi\Plus\API2\Controllers\Feed\TopicReport::class);
+
+    /*
+     * List at me messages.
+     *
+     * @Get /api/v2/user/message/atme
+     * @Param::query('limit', 'integer', 'The query data limit.')
+     * @Param::query('index', 'integer', 'The query start index.')
+     * @param::query('direction', 'enum:asc,desc', 'The data order by id direction.')
+     * @Response::header('Sttaus', 200, 'OK')
+     * @response::json('<pre>
+     * [
+     *  {
+     *      "id": 1,
+     *      "user_id": 1,
+     *      "resourceable": {
+     *          "type": "feeds",
+     *          "id": "id"
+     *      },
+     *      "created_at": "2018-08-13T08:06:54Z"
+     *  }
+     * ]
+     * </pre>')
+     */
+    $api->get('user/message/atme', \Zhiyi\Plus\API2\Controllers\User\Message\At::class);
+
+    /*
+     * List all comments
+     *
+     * @Get /api/v2/comments
+     * @Param::query('limit', 'integer', 'The query data limit.')
+     * @Param::query('index', 'integer', 'The query data start index.')
+     * @Param::query('direction', 'enum:asc,desc', 'The data order by id direction.')
+     * @Param::query('author', 'integer', 'The comment author user id')
+     * @Param::query('for_user', 'integer', 'The comment target user id')
+     * @Param::query('for_type', 'enum:all,target,reply', 'for user type')
+     * @Param::query('id', 'string', 'Comment IDs, using `,` slicing')
+     * @Param::query('resourceable_id', 'string', 'Resourceable IDs, using `,` slicing')
+     * @Param::query('resourceable_type', 'string', 'Resourceabe type name')
+     * @Response::header('Sttaus', 200, 'OK')
+     * @Response::json('<pre>
+     * [
+     *     {
+     *          "id": 1,
+     *          "user_id": 1,
+     *          "target_user": 2,
+     *          "reply_user": 3,
+     *          "body": "Hi, I love you.",
+     *          "resourceable": {
+     *              "type": "feeds",
+     *              "id": 1
+     *          },
+     *          "created_at": "2018-08-15T05:57:01Z"
+     *     }
+     * ]
+     * </pre>')
+     */
+    $api->get('comments', \Zhiyi\Plus\API2\Controllers\Comment::class.'@index');
+
+    // List all authed user abilities
+    $api->get('user/abilities', \Zhiyi\Plus\API2\Controllers\User\AbilityController::class);
+
+    // User Notifications
+    $api->get('user/notifications', \Zhiyi\Plus\API2\Controllers\NotificationController::class.'@index');
+    $api->patch('user/notifications', \Zhiyi\Plus\API2\Controllers\NotificationController::class.'@update');
+    $api->get('user/notification-statistics', \Zhiyi\Plus\API2\Controllers\NotificationController::class.'@statistics');
+    $api->patch('user/clear-follow-notification', \Zhiyi\Plus\API2\Controllers\NotificationController::class.'@clearFollowNotifications');
+
+    // News Posts
+    $api->delete('news/posts/{post}', \Zhiyi\Plus\API2\Controllers\NewsPostController::class.'@destroy');
 });

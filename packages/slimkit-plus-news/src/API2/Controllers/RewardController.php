@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,10 +21,9 @@ declare(strict_types=1);
 namespace Zhiyi\Component\ZhiyiPlus\PlusComponentNews\API2\Controllers;
 
 use Illuminate\Http\Request;
-use Zhiyi\Plus\Models\GoldType;
 use Zhiyi\Plus\Models\CommonConfig;
+use Zhiyi\Plus\Models\CurrencyType;
 use Zhiyi\Plus\Models\WalletCharge;
-use Zhiyi\Plus\Models\UserCount as UserCountModel;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentNews\Models\News;
 
 class RewardController extends Controller
@@ -35,11 +34,11 @@ class RewardController extends Controller
     // 系统内货币与真实货币兑换比例
     protected $wallet_ratio;
 
-    public function __construct(GoldType $goldModel, CommonConfig $configModel)
+    public function __construct(CommonConfig $configModel)
     {
         $walletConfig = $configModel->where('name', 'wallet:ratio')->first();
 
-        $this->goldName = $goldModel->where('status', 1)->select('name', 'unit')->value('name') ?? '金币';
+        $this->goldName = CurrencyType::current('name');
         $this->wallet_ratio = $walletConfig->value ?? 100;
     }
 
@@ -57,74 +56,69 @@ class RewardController extends Controller
         $amount = $request->input('amount');
         if (! $amount || $amount < 0) {
             return response()->json([
-                'amount' => ['请输入正确的打赏金额'],
+                'amount' => '请输入正确的打赏金额',
             ], 422);
         }
         $user = $request->user();
         $user->load('wallet');
         $news->load('user');
-        $current_user = $news->user;
+        $targetUser = $news->user;
 
         if (! $user->wallet || $user->wallet->balance < $amount) {
             return response()->json([
-                'message' => ['余额不足'],
+                'message' => '余额不足',
             ], 403);
         }
 
-        // 系统消息未读数预处理, 事务中只做保存操作
-        $userCount = UserCountModel::firstOrNew([
-            'user_id' => $user->id,
-            'type' => 'user-system',
-        ]);
-
-        $userCount->total += 1;
-
-        $user->getConnection()->transaction(function () use ($user, $news, $charge, $current_user, $amount) {
+        $user->getConnection()->transaction(function () use ($user, $news, $charge, $targetUser, $amount) {
             // 扣除操作用户余额
             $user->wallet()->decrement('balance', $amount);
 
             // 扣费记录
             $userCharge = clone $charge;
             $userCharge->channel = 'user';
-            $userCharge->account = $current_user->id;
+            $userCharge->account = $targetUser->id;
             $userCharge->subject = '资讯打赏';
             $userCharge->action = 0;
             $userCharge->amount = $amount;
-            $userCharge->body = sprintf('打赏资讯《%s》', $news->title);
+            $userCharge->body = sprintf('打赏资讯"%s"', $news->title);
             $userCharge->status = 1;
             $user->walletCharges()->save($userCharge);
 
-            // 保存系统未读数
-            $userCount->save();
+            // 打赏记录
+            $news->reward($user, $amount);
 
-            if ($current_user->wallet) {
-                // 增加对应用户余额
-                $current_user->wallet()->increment('balance', $amount);
+            if ($targetUser->wallet) {
+                // 旧版钱包增加对应用户余额
+                $targetUser->wallet()->increment('balance', $amount);
 
-                $charge->user_id = $current_user->id;
+                $charge->user_id = $targetUser->id;
                 $charge->channel = 'user';
                 $charge->account = $user->id;
                 $charge->subject = '资讯被打赏';
                 $charge->action = 1;
                 $charge->amount = $amount;
-                $charge->body = sprintf('资讯《%s》被打赏', $news->title);
+                $charge->body = sprintf('资讯"%s"被打赏', $news->title);
                 $charge->status = 1;
                 $charge->save();
 
-                // 添加被打赏通知
-                $currentNotice = sprintf('你的资讯《%s》被%s打赏%s%s', $news->title, $user->name, $amount * $this->wallet_ratio / 10000, $this->goldName);
-                $current_user->sendNotifyMessage('news:reward', $currentNotice, [
-                    'news' => $news,
-                    'user' => $user,
-                ]);
+                $targetUser->notify(new SystemNotification(sprintf('%s打赏了你的资讯文章', $user->name), [
+                    'type' => 'reward:news',
+                    'sender' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                    ],
+                    'amount' => $amount,
+                    'news' => [
+                        'id' => $news->id,
+                        'title' => $news->subject,
+                    ],
+                ]));
             }
-
-            // 打赏记录
-            $news->reward($user, $amount);
         });
 
         return response()->json([
-            'message' => ['打赏成功'],
+            'message' => '打赏成功',
         ], 201);
     }
 

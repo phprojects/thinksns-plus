@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -57,11 +57,13 @@ class CommentNewsTest extends TestCase
      */
     public function testCommentNews()
     {
+        $other = factory(UserModel::class)->create();
         $response = $this
             ->actingAs($this->user, 'api')
             ->json('POST', "/api/v2/news/{$this->news->id}/comments", [
                 'body' => 'test',
-                'reply_user' => 0,
+                'reply_user' => $other->id,
+                'comment_mark' => rand(1000, 9999),
             ]);
         $response
             ->assertStatus(201);

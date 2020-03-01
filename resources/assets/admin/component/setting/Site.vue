@@ -22,10 +22,10 @@
               <label class="control-label col-md-2">金币</label>
               <div class="col-md-6">
                 <label class="radio-inline">
-                  <input type="radio" :value="radio.on"  v-model="site.gold.status" :disabled="!site.status"> 开启
+                  <input type="radio" :value="radio.on"  v-model="site.gold.status" > 开启
                 </label>
                 <label class="radio-inline">
-                  <input type="radio" :value="radio.off" v-model="site.gold.status" :disabled="!site.status"> 关闭
+                  <input type="radio" :value="radio.off" v-model="site.gold.status" > 关闭
                 </label>
               </div>
               <div class="col-md-4">
@@ -37,10 +37,10 @@
               <label class="control-label col-md-2">打赏</label>
               <div class="col-md-6">
                 <label class="radio-inline">
-                  <input type="radio" :value="radio.on"  v-model="site.reward.status" :disabled="!site.status"> 开启
+                  <input type="radio" :value="radio.on"  v-model="site.reward.status" > 开启
                 </label>
                 <label class="radio-inline">
-                  <input type="radio" :value="radio.off"  v-model="site.reward.status" :disabled="!site.status"> 关闭
+                  <input type="radio" :value="radio.off"  v-model="site.reward.status" > 关闭
                 </label>
               </div>
               <div class="col-md-4">
@@ -61,25 +61,25 @@
               <label for="" class="control-label col-md-2">匿名开关</label>
               <div class="col-md-6">
                 <label class="radio-inline">
-                  <input type="radio" :value="radio.on"  v-model="site.anonymous.status" :disabled="!site.status"> 开启
+                  <input type="radio" :value="radio.on"  v-model="site.anonymous.status" > 开启
                 </label>
                 <label class="radio-inline">
-                  <input type="radio" :value="radio.off"  v-model="site.anonymous.status" :disabled="!site.status"> 关闭
+                  <input type="radio" :value="radio.off"  v-model="site.anonymous.status" > 关闭
                 </label>
               </div>
               <div class="col-md-4">
                 <span class="help-block">站点是否开启匿名，开启后用户可以选择匿名操作部分内容</span>
               </div>
             </div>
-            <div class="form-group" v-if="site.anonymous.status">
+            <!-- <div class="form-group" v-if="site.anonymous.status">
               <label class="control-label col-md-2">匿名规则说明</label>
               <div class="col-md-6">
-                <textarea class="form-control" v-model="site.anonymous.rule">{{ site.anonymous.rule }} </textarea>
+                <textarea class="form-control" v-model="site.anonymous.rule"></textarea>
               </div>
               <div class="col-md-4">
                 <span class="help-block">用于开启匿名时，给用户说明匿名规则</span>
               </div>
-            </div>
+            </div> -->
             <div class="form-group">
               <label class="control-label col-md-2">预留呢称</label>
               <div class="col-md-6">
@@ -108,16 +108,15 @@
                 <span class="help-block">用户邀请模版</span>
               </div>
             </div>
-            <div class="form-group">
+            <!-- <div class="form-group">
               <label class="control-label col-md-2">关于我们</label>
               <div class="col-md-6">
-                <input type="text" class="form-control" v-model="site.about_url" placeholder="例如: http://www.about.com">
-                </textarea>
+                <input type="text" class="form-control" v-model="site.about_url" placeholder="例如: http://www.about.com" />
               </div>
               <div class="col-md-4">
                 <span class="help-block">关于我们链接地址</span>
               </div>
-            </div>
+            </div> -->
             <div class="form-group">
               <label class="control-label col-md-2"></label>
               <div class="col-md-6">
@@ -203,10 +202,6 @@ export default {
         let Message = new PlusMessageBundle(data);
         this.message.error = Message.getMessage();
       });
-    },
-    validate () {
-      let site = this.site;
-      return (site.status && !site.off_reason) ? false : true;
     },
   },
   created () {

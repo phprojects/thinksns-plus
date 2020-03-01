@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,9 +20,10 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Services\Wallet;
 
+use Illuminate\Support\Str;
+use function Zhiyi\Plus\setting;
 use Pingpp\Pingpp as PingppInit;
 use Pingpp\Charge as PingppCharge;
-use Zhiyi\Plus\Repository\WalletPingPlusPlus;
 use Zhiyi\Plus\Models\WalletOrder as WalletOrderModel;
 use Zhiyi\Plus\Models\WalletCharge as WalletChargeModel;
 
@@ -34,52 +35,48 @@ class Charge
      * @var string
      */
     protected $appId;
-
     /**
      * Ping++ secret key.
      *
      * @var string
      */
     protected $secretkey;
-
     /**
      * 商户私钥.
      *
      * @var string
      */
     protected $privateKey;
-
     /**
      * The charge prefix.
      *
      * @var string
      */
     private $prefix = 'a';
-
     /**
      * 支持的订单类型.
      *
      * @var array
      */
-    protected $allowType = [
-        'applepay_upacp',
-        'alipay',
-        'alipay_wap',
-        'alipay_pc_direct',
-        'alipay_qr',
-        'wx',
-        'wx_wap',
-    ];
+    protected $allowType
+        = [
+            'applepay_upacp',
+            'alipay',
+            'alipay_wap',
+            'alipay_pc_direct',
+            'alipay_qr',
+            'wx',
+            'wx_wap',
+        ];
 
     /**
      * Create the service instance.
      *
-     * @param \Zhiyi\Plus\Repository\WalletPingPlusPlus $repository
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function __construct(WalletPingPlusPlus $repository)
+    public function __construct()
     {
-        $config = $repository->get();
+        $config = setting('wallet', 'ping++', []);
 
         $this->appId = $config['app_id'] ?? null;
         $this->secretkey = $config['secret_key'] ?? null;
@@ -93,7 +90,8 @@ class Charge
     /**
      * query a charge.
      *
-     * @param string $charge
+     * @param  string  $charge
+     *
      * @return array
      * @author Seven Du <shiweidu@outlook.com>
      */
@@ -105,8 +103,9 @@ class Charge
     /**
      * Create charge.
      *
-     * @param \Zhiyi\Plus\Models\WalletCharge $charge
-     * @param array $extra
+     * @param  \Zhiyi\Plus\Models\WalletCharge  $charge
+     * @param  array  $extra
+     *
      * @return array
      * @author Seven Du <shiweidu@outlook.com>
      */
@@ -118,94 +117,110 @@ class Charge
 
         // Request Ping++
         return PingppCharge::create([
-            'order_no' => $this->formatChargeId($charge->id),
-            'amount' => $charge->amount,
-            'app' => ['id' => $this->appId],
-            'channel' => $charge->channel,
-            'currency' => $charge->currency = 'cny', // 目前只支持 cny
+            'order_no'  => $this->formatChargeId($charge->id),
+            'amount'    => $charge->amount,
+            'app'       => ['id' => $this->appId],
+            'channel'   => $charge->channel,
+            'currency'  => $charge->currency = 'cny', // 目前只支持 cny
             'client_ip' => request()->getClientIp(),
-            'subject' => $charge->subject,
-            'body' => $charge->body,
-            'extra' => $extra,
+            'subject'   => $charge->subject,
+            'body'      => $charge->body,
+            'extra'     => $extra,
         ]);
     }
 
     /**
      * Create charge for new wallet model.
      *
-     * @param WalletOrderModel $order
-     * @param string $type
-     * @param array $extra
+     * @param  WalletOrderModel  $order
+     * @param  string  $type
+     * @param  array  $extra
+     *
      * @return array
      * @author BS <414606094@qq.com>
      */
-    public function newCreate(WalletOrderModel $order, string $type, array $extra = [])
-    {
+    public function newCreate(
+        WalletOrderModel $order,
+        string $type,
+        array $extra = []
+    ) {
         if (! $order->id) {
             $order->save();
         }
 
         // Request Ping++
         return PingppCharge::create([
-            'order_no' => $this->formatChargeId($order->id),
-            'amount' => $order->amount,
-            'app' => ['id' => $this->appId],
-            'channel' => $type,
-            'currency' => 'cny', // 目前只支持 cny
+            'order_no'  => $this->formatChargeId($order->id),
+            'amount'    => $order->amount,
+            'app'       => ['id' => $this->appId],
+            'channel'   => $type,
+            'currency'  => 'cny', // 目前只支持 cny
             'client_ip' => request()->getClientIp(),
-            'subject' => $order->title,
-            'body' => $order->body,
-            'extra' => $extra,
+            'subject'   => $order->title,
+            'body'      => $order->body,
+            'extra'     => $extra,
         ]);
     }
 
     /**
      * 不使用任何数据模型创建ping++订单.
      *
-     * @param int $id
-     * @param string $type
-     * @param int $amount
-     * @param string $title
-     * @param string $body
-     * @param array $extra
+     * @param  int  $id
+     * @param  string  $type
+     * @param  int  $amount
+     * @param  string  $title
+     * @param  string  $body
+     * @param  array  $extra
+     *
      * @return array
      * @author BS <414606094@qq.com>
      */
-    public function createWithoutModel(int $id, string $type, int $amount, string $title, string $body, array $extra)
-    {
+    public function createWithoutModel(
+        int $id,
+        string $type,
+        int $amount,
+        string $title,
+        string $body,
+        array $extra
+    ) {
         return PingppCharge::create([
-            'order_no' => $this->formatChargeId($id),
-            'amount' => $amount,
-            'app' => ['id' => $this->appId],
-            'channel' => $type,
-            'currency' => 'cny', // 目前只支持 cny
+            'order_no'  => $this->formatChargeId($id),
+            'amount'    => $amount,
+            'app'       => ['id' => $this->appId],
+            'channel'   => $type,
+            'currency'  => 'cny', // 目前只支持 cny
             'client_ip' => request()->getClientIp(),
-            'subject' => $title,
-            'body' => $body,
-            'extra' => $extra,
+            'subject'   => $title,
+            'body'      => $body,
+            'extra'     => $extra,
         ]);
     }
 
     /**
      * Format charge id.
      *
-     * @param int $chargeId
+     * @param  int  $chargeId
+     *
      * @return string
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function formatChargeId(int $chargeId): string
+    public function formatChargeId(int $chargeId)
+    : string
     {
-        return $this->getPrefix().str_pad(strval($chargeId), 19, '0', STR_PAD_LEFT);
+        return $this->getPrefix().str_pad(strval($chargeId), 19, '0',
+                STR_PAD_LEFT);
     }
 
     /**
      * Unformat charge id.
      *
-     * @param string $chargeId
+     * @param  string  $chargeId
+     *
      * @return int
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function unformatChargeId(string $chargeId): int
+    public function unformatChargeId(string $chargeId)
+    : int
     {
         return intval(
             ltrim(
@@ -220,7 +235,8 @@ class Charge
      * @return string
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function getPrefix(): string
+    public function getPrefix()
+    : string
     {
         return $this->prefix;
     }
@@ -228,7 +244,8 @@ class Charge
     /**
      * Ser format prefix.
      *
-     * @param string $prefix
+     * @param  string  $prefix
+     *
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function setPrefix(string $prefix)
@@ -245,51 +262,60 @@ class Charge
     /**
      * 检测支付方式及额外参数.
      *
-     * @param string $type
-     * @param array $extra
+     * @param  string  $type
+     * @param  array  $extra
+     *
      * @return boolen
      * @author BS <414606094@qq.com>
      */
-    public function checkRechargeArgs(string $type, array $extra): bool
+    public function checkRechargeArgs(string $type, array $extra)
+    : bool
     {
         if (in_array($type, $this->allowType)) {
-            return $this->{camel_case('check_'.$type.'_extra')}($extra);
+            return $this->{Str::camel('check_'.$type.'_extra')}($extra);
         }
 
         return false;
     }
 
-    protected function checkApplepayUpacpExtra(): bool
+    protected function checkApplepayUpacpExtra()
+    : bool
     {
         return true;
     }
 
-    protected function checkAlipayExtra(): bool
+    protected function checkAlipayExtra()
+    : bool
     {
         return true;
     }
 
-    protected function checkAlipayWapExtra(array $extra): bool
+    protected function checkAlipayWapExtra(array $extra)
+    : bool
     {
         return array_key_exists('success_url', $extra);
     }
 
-    protected function checkAlipayPcDirectExtra(array $extra): bool
+    protected function checkAlipayPcDirectExtra(array $extra)
+    : bool
     {
         return array_key_exists('success_url', $extra);
     }
 
-    protected function checkAlipayQrExtra(array $extra): bool
+    protected function checkAlipayQrExtra(array $extra)
+    : bool
     {
         return array_key_exists('success_url', $extra);
     }
 
-    protected function checkWxExtra(): bool
+    protected function checkWxExtra()
+    : bool
     {
         return true;
     }
 
-    protected function checkWxWapExtra(array $extra): bool
+    protected function checkWxWapExtra(array $extra)
+    : bool
     {
         return array_key_exists('success_url', $extra);
     }

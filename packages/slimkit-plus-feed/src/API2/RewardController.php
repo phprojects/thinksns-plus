@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,11 +21,13 @@ declare(strict_types=1);
 namespace Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\API2;
 
 use Illuminate\Http\Request;
-use Zhiyi\Plus\Models\GoldType;
 use Zhiyi\Plus\Models\CommonConfig;
+use Zhiyi\Plus\Models\CurrencyType;
 use Zhiyi\Plus\Models\WalletCharge;
+use Illuminate\Support\Facades\Cache;
 use Zhiyi\Plus\Http\Controllers\Controller;
-use Zhiyi\Plus\Models\UserCount as UserCountModel;
+use Zhiyi\Plus\Notifications\System as SystemNotification;
+use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\CacheNames;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\Feed;
 
 class RewardController extends Controller
@@ -36,98 +38,125 @@ class RewardController extends Controller
     // 系统内货币与真实货币兑换比例
     protected $wallet_ratio;
 
-    public function __construct(GoldType $goldModel, CommonConfig $configModel)
+    public function __construct(CommonConfig $configModel)
     {
         $walletConfig = $configModel->where('name', 'wallet:ratio')->first();
 
-        $this->goldName = $goldModel->where('status', 1)->select('name', 'unit')->value('name') ?? '金币';
+        $this->goldName = CurrencyType::current('name');
         $this->wallet_ratio = $walletConfig ? $walletConfig->value : 100;
     }
 
     /**
      * 打赏一条动态.
      *
-     * @author bs<414606094@qq.com>
-     * @param  Request      $request
-     * @param  Feed         $feed
-     * @param  WalletCharge $charge
+     * @param  Request  $request
+     * @param  Feed  $feed
+     * @param  WalletCharge  $charge
+     *
      * @return mix
+     * @throws \Throwable
+     * @author bs<414606094@qq.com>
      */
     public function reward(Request $request, Feed $feed, WalletCharge $charge)
     {
+        $user = $request->user();
+        // 判断锁
+        if (Cache::has(sprintf(CacheNames::REWARD_FEED_LOCK, $feed->id,
+            $user->id))) {
+            return response('请求太频繁了', 429);
+        }
+        // 加锁
+        Cache::forever(sprintf(CacheNames::REWARD_FEED_LOCK, $feed->id,
+            $user->id), true);
         $amount = $request->input('amount');
         if (! $amount || $amount < 0) {
+            Cache::forget(sprintf(CacheNames::REWARD_FEED_LOCK, $feed->id,
+                $user->id));
+
             return response()->json([
-                'amount' => ['请输入正确的打赏金额'],
+                'amount' => '请输入正确的打赏金额',
             ], 422);
         }
-        $user = $request->user();
         $user->load('wallet');
         $feed->load('user');
         $current_user = $feed->user;
-
         if (! $user->wallet || $user->wallet->balance < $amount) {
+            Cache::forget(sprintf(CacheNames::REWARD_FEED_LOCK, $feed->id,
+                $user->id));
+
             return response()->json([
-                'message' => ['余额不足'],
+                'message' => '余额不足',
             ], 403);
         }
 
-        // 系统消息未读数预处理, 事务中只做保存操作
-        $userCount = UserCountModel::firstOrNew([
-            'user_id' => $current_user->id,
-            'type' => 'user-system',
-        ]);
+        try {
+            $user->getConnection()->transaction(function () use (
+                $user,
+                $feed,
+                $charge,
+                $current_user,
+                $amount
+            ) {
+                // 扣除操作用户余额
+                $user->wallet()->decrement('balance', $amount);
 
-        $userCount->total += 1;
+                $feed_title = str_limit($feed->feed_content, 100, '...');
+                $feed_title = $feed_title ? "“${feed_title}”" : '';
+                // 扣费记录
+                $userCharge = clone $charge;
+                $userCharge->channel = 'user';
+                $userCharge->account = $current_user->id;
+                $userCharge->subject = '打赏动态';
+                $userCharge->action = 0;
+                $userCharge->amount = $amount;
+                $userCharge->body = sprintf('打赏“%s”的动态%s', $current_user->name,
+                    $feed_title);
+                $userCharge->status = 1;
+                $user->walletCharges()->save($userCharge);
+                // 打赏记录
+                $feed->reward($user, $amount);
 
-        $user->getConnection()->transaction(function () use ($user, $feed, $charge, $current_user, $amount) {
-            // 扣除操作用户余额
-            $user->wallet()->decrement('balance', $amount);
+                if ($current_user->wallet) {
+                    // 增加对应用户余额
+                    $current_user->wallet()->increment('balance', $amount);
 
-            $feed_title = str_limit($feed->feed_content, 100, '...');
+                    $charge->user_id = $current_user->id;
+                    $charge->channel = 'user';
+                    $charge->account = $user->id;
+                    $charge->subject = '动态被打赏';
+                    $charge->action = 1;
+                    $charge->amount = $amount;
+                    $charge->body = sprintf('“%s”打赏了你的动态%s', $user->name,
+                        $feed_title);
+                    $charge->status = 1;
+                    $charge->save();
 
-            // 扣费记录
-            $userCharge = clone $charge;
-            $userCharge->channel = 'user';
-            $userCharge->account = $current_user->id;
-            $userCharge->subject = '打赏动态';
-            $userCharge->action = 0;
-            $userCharge->amount = $amount;
-            $userCharge->body = sprintf('打赏动态《%s》', $feed_title);
-            $userCharge->status = 1;
-            $user->walletCharges()->save($userCharge);
-            // 增加系统通知未读数
-            $userCount->save();
+                    // 添加被打赏通知
 
-            if ($current_user->wallet) {
-                // 增加对应用户余额
-                $current_user->wallet()->increment('balance', $amount);
+                    $feed->user->notify(new SystemNotification(sprintf('%s打赏了你的动态',
+                        $user->name), [
+                        'type'    => 'reward:feeds',
+                        'sender'  => [
+                            'id'   => $user->id,
+                            'name' => $user->name,
+                        ],
+                        'amount'  => $amount,
+                        'unit'    => $this->goldName,
+                        'feed_id' => $feed->id,
+                    ]));
+                }
+            });
+            Cache::forget(sprintf(CacheNames::REWARD_FEED_LOCK, $feed->id,
+                $user->id));
 
-                $charge->user_id = $current_user->id;
-                $charge->channel = 'user';
-                $charge->account = $user->id;
-                $charge->subject = '动态被打赏';
-                $charge->action = 1;
-                $charge->amount = $amount;
-                $charge->body = sprintf('动态《%s》被打赏', $feed_title);
-                $charge->status = 1;
-                $charge->save();
-
-                // 添加被打赏通知
-                $notice = sprintf('你的动态《%s》被%s打赏%s%s', $feed_title, $user->name, $amount * $this->wallet_ratio / 10000, $this->goldName);
-                $current_user->sendNotifyMessage('feed:reward', $notice, [
-                    'feed' => $feed,
-                    'user' => $user,
-                ]);
-            }
-
-            // 打赏记录
-            $feed->reward($user, $amount);
-        });
-
-        return response()->json([
-            'message' => ['打赏成功'],
-        ], 201);
+            return response()->json([
+                'message' => '打赏成功',
+            ], 201);
+        } catch (\Throwable $e) {
+            Cache::forget(sprintf(CacheNames::REWARD_FEED_LOCK, $feed->id,
+                $user->id));
+            throw $e;
+        }
     }
 
     /**

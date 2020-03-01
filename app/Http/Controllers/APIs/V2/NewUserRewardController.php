@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,70 +20,87 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Http\Controllers\APIs\V2;
 
+use Zhiyi\Plus\CacheNames;
 use Zhiyi\Plus\Models\User;
 use Illuminate\Http\Request;
-use Zhiyi\Plus\Packages\Wallet\Order;
-use Zhiyi\Plus\Packages\Wallet\TypeManager;
+use Illuminate\Http\JsonResponse;
+use Zhiyi\Plus\Models\CurrencyType;
+use Illuminate\Support\Facades\Cache;
+use Zhiyi\Plus\Http\Middleware\VerifyUserPassword;
+use Zhiyi\Plus\Notifications\System as SystemNotification;
+use Zhiyi\Plus\Packages\Currency\Processes\User as UserProcess;
 
 class NewUserRewardController extends Controller
 {
-    /**
-     * 元到分转换比列.
-     */
-    const RATIO = 100;
+    // 系统货币名称
+    protected $goldName;
+
+    public function __construct()
+    {
+        $this
+            ->middleware(VerifyUserPassword::class)
+            ->only(['store']);
+        $this->goldName = CurrencyType::current('name');
+    }
 
     /**
      * 新版打赏用户.
      *
-     * @param Request $request
-     * @param User $target
-     * @param TypeManager $manager
-     * @return \Illuminate\Http\JsonResponse
+     * @param  Request  $request
+     * @param  User  $target
+     * @param  UserProcess  $processer
+     *
+     * @return JsonResponse
      */
-    public function store(Request $request, User $target, TypeManager $manager)
+    public function store(Request $request, User $target, UserProcess $processer)
     {
+        $user = $request->user();
+
+        // 判断锁
+        if (Cache::has(sprintf(CacheNames::REWARD_USER_LOCK, $target->id, $user->id))) {
+            return response('操作太频繁了', 429);
+        }
+        // 加锁
+        Cache::forever(sprintf(CacheNames::REWARD_USER_LOCK, $target->id, $user->id), true);
+
         $amount = (int) $request->input('amount');
 
         if (! $amount || $amount < 0) {
-            return response()->json(['amount' => ['请输入正确的打赏金额']], 422);
+            return response()->json(['amount' => '请输入正确的'.$this->goldName.'数量'], 422);
         }
-
-        $user = $request->user();
 
         if ($user->id == $target->id) {
-            return response()->json(['message' => ['用户不能打赏自己']], 422);
+            return response()->json(['message' => '用户不能打赏自己'], 422);
         }
 
-        if (! $user->newWallet || $user->newWallet->balance < $amount) {
-            return response()->json(['message' => ['余额不足']], 403);
+        if (! $user->currency || $user->currency->sum < $amount) {
+            return response()->json(['message' => '余额不足'], 403);
         }
 
-        if (! $target->wallet) {
-            return response()->json(['message' => ['对方钱包信息有误']], 500);
+        if (! $target->currency) {
+            return response()->json(['message' => '对方'.$this->goldName.'信息有误'], 500);
         }
 
-        $money = ($amount / self::RATIO);
+        $pay = $processer->prepayment($user->id, $amount, $target->id, sprintf('打赏用户“%s”', $target->name), sprintf('打赏用户“%s”，%s扣除%s', $target->name, $this->goldName, $amount));
+        $paid = $processer->receivables($target->id, $amount, $user->id, sprintf('“%s”打赏了你', $user->name), sprintf('用户“%s”打赏了你”，%s增加%s', $user->name, $this->goldName, $amount));
 
-        $status = $manager->driver(Order::TARGET_TYPE_REWARD)->reward([
-            'reward_resource' => $user,
-            'order' => [
-                'user' => $user,
-                'target' => $target,
+        if ($pay && $paid) {
+            $target->notify(new SystemNotification(sprintf('%s打赏了你%s%s', $user->name, $amount, $this->goldName), [
+                'type' => 'reward',
+                'sender' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                ],
                 'amount' => $amount,
-                'user_order_body' => sprintf('打赏用户%s，钱包扣除%s元', $target->name, $money),
-                'target_order_body' => sprintf('被用户%s打赏，钱包增加%s元', $user->name, $money),
-            ],
-            'notice' => [
-                'type' => 'user:reward',
-                'detail' => ['user' => $user],
-                'message' => sprintf('你被%s打赏%s', $user->name, $money),
-            ],
-        ]);
+                'unit' => $this->goldName,
+            ]));
+            Cache::forget(sprintf(CacheNames::REWARD_USER_LOCK, $target->id, $user->id));
 
-        if ($status === true) {
-            return response()->json(['message' => ['打赏成功']], 201);
+            return response()->json(['message' => '打赏成功'], 201);
         } else {
-            return response()->json(['message' => ['打赏失败']], 500);
+            Cache::forget(sprintf(CacheNames::REWARD_USER_LOCK, $target->id, $user->id));
+
+            return response()->json(['message' => '打赏失败'], 500);
         }
     }
 }

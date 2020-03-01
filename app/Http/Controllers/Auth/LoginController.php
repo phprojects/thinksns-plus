@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,10 +20,12 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Http\Controllers\Auth;
 
+use Zhiyi\Plus\Models\User;
 use Illuminate\Http\Request;
 use function Zhiyi\Plus\username;
 use Illuminate\Contracts\Config\Repository;
 use Zhiyi\Plus\Http\Controllers\Controller;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 
 class LoginController extends Controller
@@ -62,6 +64,7 @@ class LoginController extends Controller
      *
      * @param \Illuminate\Http\Request $request
      * @return mixed
+     * @throws \Illuminate\Validation\ValidationException
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function login(Request $request)
@@ -69,6 +72,14 @@ class LoginController extends Controller
         $request->merge([
             $this->username() => $request->input('login'),
         ]);
+
+        $user = User::withTrashed()
+            ->where($this->username(), $request->input('login'))
+            ->whereNotNull('deleted_at')
+            ->first();
+        if ($user) {
+            throw ValidationException::withMessages(['账号已被禁用，请联系管理员']);
+        }
 
         return $this->authenticatesUsersLogin($request);
     }

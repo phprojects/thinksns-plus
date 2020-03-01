@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,13 +20,13 @@ declare(strict_types=1);
 
 namespace Zhiyi\Component\ZhiyiPlus\PlusComponentFeed;
 
+use function Zhiyi\Plus\setting;
 use Illuminate\Support\ServiceProvider;
 use Zhiyi\Plus\Support\ManageRepository;
 use Zhiyi\Plus\Support\BootstrapAPIsEventer;
 use Zhiyi\Plus\Support\PinnedsNotificationEventer;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\Feed;
-use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
 class FeedServiceProvider extends ServiceProvider
 {
@@ -50,20 +50,16 @@ class FeedServiceProvider extends ServiceProvider
         ]);
 
         $this->publishes([
-            dirname(__DIR__).'/config/feed.php' => $this->app->configPath('feed.php'),
-        ], 'config');
-
-        $this->publishes([
             dirname(__DIR__).'/assets' => $this->app->PublicPath().'/assets/feed',
-        ], 'public');
+        ], 'feed:resource/assets');
 
         $this->app->make(BootstrapAPIsEventer::class)->listen('v2', function () {
             return [
                 'feed' => [
-                    'reward' => (bool) $this->app->make(ConfigRepository::class)->get('feed.reward'),
-                    'paycontrol' => (bool) $this->app->make(ConfigRepository::class)->get('feed.paycontrol'),
-                    'items' => (array) $this->app->make(ConfigRepository::class)->get('feed.items'),
-                    'limit' => (int) $this->app->make(ConfigRepository::class)->get('feed.limit'),
+                    'reward' => setting('feed', 'reward-switch'),
+                    'paycontrol' => setting('feed', 'pay-switch', false),
+                    'items' => setting('feed', 'pay-items', []),
+                    'limit' => setting('feed', 'pay-word-limit', 50),
                 ],
             ];
         });
@@ -74,11 +70,16 @@ class FeedServiceProvider extends ServiceProvider
                 'namespace' => \Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\FeedPinned::class,
                 'owner_prefix' => 'target_user',
                 'wherecolumn' => function ($query) {
-                    return $query->where('expires_at', null)->where('channel', 'comment')->whereExists(function ($query) {
-                        return $query->from('feeds')->whereRaw('feed_pinneds.raw = feeds.id')->where('deleted_at', null);
-                    })->whereExists(function ($query) {
-                        return $query->from('comments')->whereRaw('feed_pinneds.target = comments.id');
-                    });
+                    return $query
+                        ->whereNull('expires_at')
+                        ->where('channel', 'comment')
+                        ->has('feed')
+                        ->has('comment');
+                // return $query->where('expires_at', null)->where('channel', 'comment')->whereExists(function ($query) {
+                    //     return $query->from('feeds')->whereRaw('feed_pinneds.raw = feeds.id')->where('deleted_at', null);
+                    // })->whereExists(function ($query) {
+                    //     return $query->from('comments')->whereRaw('feed_pinneds.target = comments.id');
+                    // });
                 },
             ];
         });
@@ -101,10 +102,6 @@ class FeedServiceProvider extends ServiceProvider
             'route' => true,
             'icon' => asset('assets/feed/feed-icon.png'),
         ]);
-
-        $this->mergeConfigFrom(
-            dirname(__DIR__).'/config/feed.php', 'feed'
-        );
 
         Relation::morphMap([
             'feeds' => Models\Feed::class,

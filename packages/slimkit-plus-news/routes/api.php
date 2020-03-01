@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -91,12 +91,10 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
 
         // News contributes.
         $api->group(['prefix' => '/news'], function (RouteContract $api) {
-
+            // 获取平均置顶积分
+            $api->get('/average', API2\AverageController::class.'@show');
             // 关注资讯分类
             $api->patch('/categories/follows', API2\CateController::class.'@follow');
-
-            // Send news contributes.
-            $api->post('/categories/{category}/news', API2\ContributeController::class.'@store')->middleware('sensitive:title,content,subject,from,author');
 
             // Update news contributes.
             $api->patch('/categories/{category}/news/{news}', API2\ContributeController::class.'@update')->middleware('sensitive:title,content,subject,from,author');
@@ -172,7 +170,6 @@ Route::group(['prefix' => 'v2'], function (RouteContract $api) {
             // 取消收藏资讯
             $api->delete('/{news}/collections', API2\CollectionController::class.'@cancel');
         });
-
         // Users API.
         $api->group(['prefix' => 'user'], function (RouteContract $api) {
 

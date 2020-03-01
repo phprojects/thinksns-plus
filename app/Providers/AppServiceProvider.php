@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,14 +20,15 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Providers;
 
+use Zhiyi\Plus\Models\User;
 use Illuminate\Support\Facades\Schema;
+use Zhiyi\Plus\Observers\UserObserver;
 use Illuminate\Support\ServiceProvider;
 use function Zhiyi\Plus\validateUsername;
 use Zhiyi\Plus\Packages\Wallet\TypeManager;
 use Illuminate\Http\Resources\Json\Resource;
 use function Zhiyi\Plus\validateChinaPhoneNumber;
 use Zhiyi\Plus\Packages\Wallet\TargetTypeManager;
-use Illuminate\Database\Eloquent\Relations\Relation;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -42,13 +43,16 @@ class AppServiceProvider extends ServiceProvider
         Resource::withoutWrapping();
         // 注册验证规则.
         $this->registerValidator();
+
+        User::observe([
+            UserObserver::class,
+        ]);
     }
 
     /**
      * Resgister the application service.
      *
      * @return void
-     * @author Seven Du <shiweidu@outlook.com>
      */
     public function register()
     {
@@ -64,7 +68,16 @@ class AppServiceProvider extends ServiceProvider
             return new TargetTypeManager($app);
         });
 
-        $this->registerMorpMap();
+        $this->app->singleton('at-message', function ($app) {
+            $manager
+                = $app->make(\Zhiyi\Plus\AtMessage\ResourceManagerInterface::class);
+
+            return new \Zhiyi\Plus\AtMessage\Message($manager);
+        });
+
+        $this->app->singleton('at-resource-manager', function ($app) {
+            return new \Zhiyi\Plus\AtMessage\ResourceManager($app);
+        });
     }
 
     /**
@@ -86,62 +99,74 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // 注册显示长度验证规则
-        $this->app->validator->extend('display_length', function ($attribute, string $value, array $parameters) {
-            unset($attribute);
+        $this->app->validator->extend('display_length',
+            function ($attribute, string $value, array $parameters) {
+                unset($attribute);
 
-            return $this->validateDisplayLength($value, $parameters);
-        });
+                return $this->validateDisplayLength($value, $parameters);
+            });
+
+        // 注册中英文显示宽度验证规则
+        $this->app->validator->extend('display_width',
+            function ($attribute, string $value, array $parameters) {
+                unset($attribute);
+
+                return $this->validateDisplayWidth($value, $parameters);
+            });
     }
 
     /**
      * 验证显示长度计算.
      *
-     * @param strint|int $value
-     * @param array $parameters
+     * @param  string|int  $value
+     * @param  array  $parameters
+     *
      * @return bool
      * @author Seven Du <shiweidu@outlook.com>
      */
-    protected function validateDisplayLength(string $value, array $parameters): bool
+    protected function validateDisplayLength(string $value, array $parameters)
+    : bool
+    {
+        preg_match_all('/[a-zA-Z0-9_]/', $value, $single);
+        $length = count($single[0]) / 2
+            + mb_strlen(preg_replace('([a-zA-Z0-9_])', '', $value));
+
+        return $this->validateBetween($length, $parameters);
+    }
+
+    /**
+     * 验证中英文显示宽度.
+     *
+     * @param  string  $value
+     * @param  array  $parameters
+     *
+     * @return bool
+     */
+    protected function validateDisplayWidth(string $value, array $parameters)
+    : bool
+    {
+        $number = strlen(mb_convert_encoding($value, 'GB18030', 'UTF-8'));
+
+        return $this->validateBetween($number, $parameters);
+    }
+
+    /**
+     * 验证一个数字是否在指定的最小最大值之间.
+     *
+     * @param  float  $number
+     * @param  array  $parameters
+     *
+     * @return bool
+     */
+    private function validateBetween(float $number, array $parameters)
+    : bool
     {
         if (empty($parameters)) {
             throw new \InvalidArgumentException('Parameters must be passed');
-        // 补充 min 位.
-        } elseif (count($parameters) === 1) {
-            $parameters = [0, array_first($parameters)];
         }
 
-        list($min, $max) = $parameters;
+        [$min, $max] = array_pad($parameters, -2, 0);
 
-        preg_match_all('/[a-zA-Z0-9_]/', $value, $single);
-        $length = count($single[0]) / 2 + mb_strlen(preg_replace('([a-zA-Z0-9_])', '', $value));
-
-        return $length >= $min && $length <= $max;
-    }
-
-    /**
-     * Register model morp map.
-     *
-     * @return void
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    protected function registerMorpMap()
-    {
-        $this->setMorphMap([
-            'users' => \Zhiyi\Plus\Models\User::class,
-            'comments' => \Zhiyi\Plus\Models\Comment::class,
-        ]);
-    }
-
-    /**
-     * Set the morph map for polymorphic relations.
-     *
-     * @param array|null $map
-     * @param bool|bool $merge
-     * @return array
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    private function setMorphMap(array $map = null, bool $merge = true)
-    {
-        Relation::morphMap($map, $merge);
+        return $number >= $min && $number <= $max;
     }
 }

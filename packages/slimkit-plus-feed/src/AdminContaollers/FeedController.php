@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,11 +21,15 @@ declare(strict_types=1);
 namespace Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\AdminControllers;
 
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 use Zhiyi\plus\Models\User;
 use Illuminate\Http\Request;
+use Zhiyi\Plus\Models\UserCount;
 use Zhiyi\Plus\Http\Controllers\Controller;
 use Illuminate\Contracts\Cache\Repository as CacheContract;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\Feed;
+use Zhiyi\Plus\Packages\Currency\Processes\User as UserProcess;
+use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\FeedPinned;
 
 class FeedController extends Controller
 {
@@ -43,14 +47,14 @@ class FeedController extends Controller
         $before = (int) $request->query('before', 0);
         $type = $request->query('type', 'all');
         $id = $request->query('id');
-        $user_id = $request->query('user_id');
         $from = $request->query('from');
         $pay = $request->query('pay');
         $stime = $request->query('stime');
         $etime = $request->query('etime');
         $keyword = $request->query('keyword');
         $top = $request->query('top');
-        $name = $request->query('userName');
+        $user = $request->query('user');
+        $trashed = $request->query('trashed');
 
         // 根据时间快捷筛选
         switch ($type) {
@@ -73,20 +77,6 @@ class FeedController extends Controller
                 break;
         }
 
-        $users = [];
-
-        if ($name) {
-            $users = $user->where('name', 'like', "%{$name}%")
-                ->get()
-                ->pluck('id')
-                ->toArray();
-        }
-
-        if ($user_id) {
-            array_push($users, $user_id);
-            $users = array_unique($users);
-        }
-
         $feeds = $model->with([
                 'user',
                 'paidNode',
@@ -100,14 +90,17 @@ class FeedController extends Controller
             ->when($id, function ($query) use ($id) { // 根据id查询
                 return $query->where('id', $id);
             })
-            ->when($users, function ($query) use ($users) { // 根据用户id查询
-                return $query->whereIn('user_id', $users);
+            ->when($user, function ($query) use ($user) {
+                return $query->where('user_id', $user);
             })
             ->when($from, function ($query) use ($from) { // 根据来源查询
                 return $query->where('feed_from', $from);
             })
             ->when($keyword, function ($query) use ($keyword) { // 根据关键字筛选
                 return $query->where('feed_content', 'like', '%'.$keyword.'%');
+            })
+            ->when($trashed, function ($query) {
+                return $query->onlyTrashed();
             })
             ->when($top && $top !== 'all', function ($query) use ($top, $datetime) { // 置顶筛选
                 switch ($top) {
@@ -261,8 +254,46 @@ class FeedController extends Controller
      */
     public function destroy(CacheContract $cache, Feed $feed)
     {
-        $feed->delete();
-        $cache->forget(sprintf('feed:%s', $feed->id));
+        $pinnedComments = FeedPinned::whereNull('expires_at')
+            ->where('raw', $feed->id)
+            ->where('channel', 'comment')
+            ->get();
+        $process = new UserProcess();
+        $feed->getConnection()->transaction(function () use ($pinnedComments, $feed, $process, $cache) {
+            $pinnedComments->map(function ($comment) use ($process, $feed, $pinnedComments) {
+                $process->reject(0, $comment->amount, $comment->user_id, '评论申请置顶退款', sprintf('退还在动态《%s》申请置顶的评论的款项', Str::limit($feed->feed_content, 100)));
+                $comment->delete();
+            });
+            // 删除动态申请置顶
+            $pinnedFeed = FeedPinned::where('channel', 'feed')
+                ->where('target', $feed->id)
+                ->first();
+            if ($pinnedFeed) {
+                $process->reject(0, $pinnedFeed->amount, $pinnedFeed->user_id, '动态申请置顶退款', sprintf('退还动态《%s》申请置顶的款项', Str::limit($feed->feed_content, 100)));
+                $pinnedFeed->delete();
+            }
+
+            // 删除话题关联
+            $feed->topics->each(function ($topic) {
+                $topic->feeds_count -= 1;
+                $topic->save();
+            });
+            $feed->topics()->sync([]);
+
+            $feed->delete();
+            $cache->forget(sprintf('feed:%s', $feed->id));
+        });
+        $userUnreadCount = FeedPinned::whereNull('expires_at')
+            ->where('target_user', $feed->user_id)
+            ->where('channel', 'comment')
+            ->count();
+
+        $userCount = UserCount::firstOrNew([
+            'type' => 'user-feed-comment-pinned',
+            'user_id' => $feed->user_id,
+        ]);
+        $userCount->total = $userUnreadCount;
+        $userCount->save();
 
         return response(null, 204);
     }

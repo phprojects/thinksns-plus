@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -34,14 +34,17 @@ class Process
 
     public function __construct()
     {
-        $this->currency_type = CurrencyTypeModel::findOrFail(1);
+        $this->currency_type = CurrencyTypeModel::current();
     }
 
     /**
      * 检测用户模型.
      *
      * @param $user
+     * @param  bool  $throw
+     *
      * @return UserModel | bool
+     * @throws \Exception
      * @author BS <414606094@qq.com>
      */
     public function checkUser($user, $throw = true)
@@ -64,14 +67,17 @@ class Process
     /**
      * 检测用户货币模型，防止后续操作出现错误.
      *
-     * @param UserModel $user
+     * @param  UserModel  $user
+     *
      * @return UserModel
      * @author BS <414606094@qq.com>
      */
-    protected function checkCurrency(UserModel $user): UserModel
+    protected function checkCurrency(UserModel $user)
+    : UserModel
     {
         if (! $user->currency) {
-            $user->currency = $user->currency()->create(['type' => $this->currency_type->id, 'sum' => 0]);
+            $user->currency = $user->currency()
+                ->create(['type' => $this->currency_type->get('id'), 'sum' => 0]);
         }
 
         return $user;

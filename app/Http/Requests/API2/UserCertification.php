@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,7 +20,6 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Http\Requests\API2;
 
-use Zhiyi\Plus\Models\Certification;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UserCertification extends FormRequest
@@ -92,9 +91,10 @@ class UserCertification extends FormRequest
             'id.required' => '证件号未提供',
             'contact.required' => '联系方式未提供',
             'desc.required' => '认证描述未提供',
-            'desc.max' => '认证描述长度最大250',
+            'desc.max' => '认证描述长度最大 250 个字',
             'files.required' => '证件照片未提供',
-            'files.exists' => '文件不存在或已被使用',
+            'files.*.required_with' => '非法提交',
+            'files.*.exists' => '文件不存在或已被使用',
         ];
 
         return $this->input('certification') === 'enterprise_certification'

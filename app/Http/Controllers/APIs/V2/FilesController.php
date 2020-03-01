@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,7 +20,10 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Http\Controllers\APIs\V2;
 
+use Cache;
+use Image;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Zhiyi\Plus\Models\File as FileModel;
@@ -38,7 +41,7 @@ class FilesController extends Controller
      *
      * @param \Illuminate\Http\Request $request
      * @param \Illuminate\Contracts\Routing\ResponseFactory $response
-     * @param \Zhiyi\Plus\Cdn\UrlManager $manager
+     * @param CdnUrlManager $cdn
      * @param \Zhiyi\Plus\Models\FileWith $fileWith
      * @return mixed
      * @author Seven Du <shiweidu@outlook.com>
@@ -54,15 +57,16 @@ class FilesController extends Controller
             'blur' => $request->query('b'),
         ]);
 
-        if (
-            ($fileWith->paidNode instanceof PaidNodeModel &&
+        if (($fileWith->paidNode instanceof PaidNodeModel &&
             $fileWith->paidNode->paid($user->id ?? 0) === false) &&
             ($fileWith->paidNode->extra === 'read' || (! isset($extra['width']) && isset($extra['height'])))
         ) {
             $extra['blur'] = (int) config('image.blur', 96);
         }
 
-        $url = $cdn->make($fileWith->file, $extra);
+        $url = Cache::remember(sprintf('file_url_%d_%s', $fileWith->id, implode('_', $extra)), 50, function () use ($fileWith, $cdn, $extra) {
+            return $cdn->make($fileWith->file, $extra);
+        });
 
         return $request->query('json') !== null
             ? $response->json(['url' => $url])->setStatusCode(200)
@@ -73,8 +77,8 @@ class FilesController extends Controller
      * 解决用户是否购买过处理.
      *
      * @param \Zhiyi\Plus\Models\User|null $user
-     * @param \Zhiyi\Plus\Models\PaidNode  $pay
-     * @return void
+     * @param PaidNodeModel $node
+     * @return bool
      * @author Seven Du <shiweidu@outlook.com>
      */
     protected function resolveUserPaid($user, PaidNodeModel $node): bool
@@ -95,25 +99,30 @@ class FilesController extends Controller
      */
     public function store(StoreUploadFileRequest $request, ResponseContract $response, Carbon $dateTime, FileModel $fileModel, FileWithModel $fileWith)
     {
-        $fileModel = $this->validateFileInDatabase($fileModel, $file = $request->file('file'), function (UploadedFile $file, string $md5) use ($fileModel, $dateTime): FileModel {
-            list($width, $height) = ($imageInfo = @getimagesize($file->getRealPath())) === false ? [null, null] : $imageInfo;
-            $path = $dateTime->format('Y/m/d/Hi');
-
-            if (($filename = $file->store($path, config('cdn.generators.filesystem.disk'))) === false) {
-                abort(500, '上传失败');
+        $clientHeight = $request->input('height', 0);
+        $clientWidth = $request->input('width', 0);
+        $fileModel = $this->validateFileInDatabase($fileModel, $file = $request->file('file'), function (UploadedFile $file, string $md5) use ($fileModel, $dateTime, $clientWidth, $clientHeight, $response): FileModel {
+            // 图片做旋转处理
+            $clientMimeType = $file->getClientMimeType();
+            if (Str::startsWith($clientMimeType, 'image/') && $clientMimeType !== 'image/gif') {
+                ini_set('memory_limit', '-1');
+                Image::make($file->getRealPath())->orientate()->save($file->getRealPath(), 100);
             }
-
+            [$width, $height] = ($imageInfo = @getimagesize($file->getRealPath())) === false ? [null, null] : $imageInfo;
+            $path = $dateTime->format('Y/m/d/Hi');
+            if (($filename = $file->store($path, config('cdn.generators.filesystem.disk'))) === false) {
+                return $response->json(['message' => '上传失败'], 500);
+            }
             $fileModel->filename = $filename;
             $fileModel->hash = $md5;
             $fileModel->origin_filename = $file->getClientOriginalName();
             $fileModel->mime = $file->getClientMimeType();
-            $fileModel->width = $width;
-            $fileModel->height = $height;
+            $fileModel->width = $width ?? $clientWidth;
+            $fileModel->height = $height ?? $clientHeight;
             $fileModel->saveOrFail();
 
             return $fileModel;
         });
-
         $fileWith = $this->resolveFileWith($fileWith, $request->user(), $fileModel);
 
         return $response->json([

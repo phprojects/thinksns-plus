@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -33,30 +33,20 @@ class UserCountsResource extends JsonResource
      */
     public function toArray($request): array
     {
-        static::withoutWrapping();
+        // unused the $request.
+        unset($request);
 
         return [
             'user' => [
-                'following' => $this['following'] ?? 0,
+                'following' => $this['user-following'] ?? 0,
                 'liked' => $this['user-liked'] ?? 0,
                 'commented' => $this['user-commented'] ?? 0,
                 'system' => $this['user-system'] ?? 0,
                 'news-comment-pinned' => $this['user-news-comment-pinned'] ?? 0,
                 'feed-comment-pinned' => $this['user-feed-comment-pinned'] ?? 0,
+                'mutual' => $this['user-mutual'] ?? 0,
+                'at' => $this['at'] ?? 0,
             ],
         ];
-    }
-
-    /**
-     * with response that the resource.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param \Illiminate\Http\Response $response
-     * @return void
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    public function withResponse($request, $response)
-    {
-        $response->setStatusCode(200);
     }
 }

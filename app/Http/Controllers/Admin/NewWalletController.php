@@ -4,12 +4,12 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -32,19 +32,27 @@ class NewWalletController extends Controller
      */
     public function statistics()
     {
-        $expenditure = WalletOrder::where('type', -1)->select(DB::raw('count(id) as count, sum(amount) as sum'))->first();
-        $income = WalletOrder::where('type', 1)->select(DB::raw('count(id) as count, sum(amount) as sum'))->first();
+        $expenditure = WalletOrder::query()
+            ->where('type', -1)
+            ->where('state', 1)
+            ->select(DB::raw('count(id) as count, sum(amount) as sum'))
+            ->first();
+        $income = WalletOrder::query()
+            ->where('type', 1)
+            ->where('state', 1)
+            ->select(DB::raw('count(id) as count, sum(amount) as sum'))->first();
 
         return response()->json([
             'expenditure' => $expenditure,
-            'income' => $income,
+            'income'      => $income,
         ], 200);
     }
 
     /**
      * 新版钱包流水.
      *
-     * @param Request $request
+     * @param  Request  $request
+     *
      * @return \Illuminate\Http\JsonResponse
      */
     public function waters(Request $request)
@@ -60,9 +68,9 @@ class NewWalletController extends Controller
         $query->when($user, function ($query) use ($user) {
             return $query->where('owner_id', $user);
         })
-        ->when($state, function ($query) use ($state) {
-            return $query->where('state', $state);
-        });
+            ->when($state, function ($query) use ($state) {
+                return $query->where('state', $state);
+            });
 
         $count = $query->count();
         $items = $query->limit($limit)->offset($offset)->latest()->get();

@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,15 +20,18 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus;
 
+use Zhiyi\Plus\Support\Setting;
+
 /**
  * 验证是否是中国验证码.
  *
  * @param string $number
+ *
  * @return bool
  */
 function validateChinaPhoneNumber(string $number): bool
 {
-    return (bool) preg_match('/^(\+?0?86\-?)?((13\d|14[57]|15[^4,\D]|17[3678]|18\d)\d{8}|170[059]\d{7})$/', $number);
+    return (bool) preg_match('/^(\+?0?86\-?)?1[3-9]\d{9}$/', $number);
 }
 
 /**
@@ -124,4 +127,23 @@ function filterUrlStringLength(string $data, int $length = 0): string
     }
 
     return $value;
+}
+
+/**
+ * Setting helper.
+ *
+ * @param  string  $namespace
+ * @param  string|null  $name
+ * @param  null  $default
+ *
+ * @return Support\any|Setting
+ */
+function setting(string $namespace, ?string $name = null, $default = null)
+{
+    $setting = Setting::create($namespace);
+    if ($name) {
+        return $setting->get($name, $default);
+    }
+
+    return $setting;
 }

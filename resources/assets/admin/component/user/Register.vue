@@ -28,9 +28,9 @@
 									<label class="radio-inline">
 							    	<input type="radio" name="type" disabled="disabled" value="invited" v-model="type" /> 仅邀请注册
 							    </label>
-<!-- 							    <label class="radio-inline">
+							    <label class="radio-inline">
 							    	<input type="radio" name="type" disabled="disabled" value="thirdPart" v-model="type" /> 仅第三方绑定
-							    </label> -->
+							    </label>
 							</div>
 						</div>
 				      </div>
@@ -49,9 +49,9 @@
 										<label class="radio-inline">
 								    	<input type="radio" name="method" value="mail-only" v-model="method" /> 仅邮箱
 								    </label>
-			<!-- 					    <label class="radio-inline">
+								    <label class="radio-inline">
 								    	<input type="radio" name="method" value="all" v-model="method" /> 手机或邮箱或第三方
-								    </label> -->
+								    </label>
 								</div>
 							</div>
 					    </div>
@@ -130,76 +130,81 @@
 </template>
 
 <script>
-	import request, { createRequestURI } from '../../util/request';
-	import lodash from 'lodash';
-	import markdownIt from 'markdown-it';
+import request, { createRequestURI } from "../../util/request";
+import lodash from "lodash";
+import markdownIt from "markdown-it";
 
-	const md = markdownIt({
-	  html: false
-	});
-	const RegisterSetting = {
-    	name: 'question-edit',
-		data: () => ({
-			loadding: true,
-			showTerms: false,
-			fixed: 'need',
-			method: 'all',
-			type: 'all',
-			loading: false,
-			message: '',
-			content: '',
-		}),
-		computed: {
-		  preview() {
-		    return md.render(this.content);
-		  }
-		},
-		methods: {
-			saveConfig() {
-				this.loading = true;
-				const { showTerms, fixed, method, type, content } = this;
-				let data = {};
-				if (showTerms) {
-					data.content = content
-				}
-				data.fixed = fixed;
-				data.showTerms = showTerms;
-				data.method = method;
-				data.type = type;
-				request.post(createRequestURI('users/register-setting'), {
-					...data
-				}, {
-					validateStatus: status => status === 201
-				})
-				.then(({ data = {}}) => {
+const md = markdownIt({
+	html: false
+});
+const RegisterSetting = {
+	name: "question-edit",
+	data: () => ({
+		loadding: true,
+		showTerms: false,
+		fixed: "need",
+		method: "all",
+		type: "all",
+		loading: false,
+		message: "",
+		content: ""
+	}),
+	computed: {
+		preview() {
+			return md.render(this.content);
+		}
+	},
+	methods: {
+		saveConfig() {
+			this.loading = true;
+			const { showTerms, fixed, method, type, content } = this;
+			let data = {};
+			if (showTerms) {
+				data.content = content;
+			}
+			data.fixed = fixed;
+			data.showTerms = showTerms;
+			data.method = method;
+			data.type = type;
+			request
+				.post(
+					createRequestURI("users/register-setting"),
+					{
+						...data
+					},
+					{
+						validateStatus: status => status === 201
+					}
+				)
+				.then(({ data = {} }) => {
 					this.loading = false;
 					this.message = data.message;
-					setTimeout( () => {
-						this.message = ''
+					setTimeout(() => {
+						this.message = "";
 					}, 2000);
 				})
-				.catch( error => {
+				.catch(error => {
 					this.loading = false;
 					console.log(error);
 				});
-			}
-		},
+		}
+	},
 
-		created () {
-
-			request.get(createRequestURI('users/register-setting'), {
+	created() {
+		request
+			.get(createRequestURI("users/register-setting"), {
 				validateStatus: status => status === 200
 			})
-			.then(({ data = {}}) => {
+			.then(({ data = {} }) => {
 				this.loadding = false;
 				this.showTerms = data.showTerms;
 				this.method = data.method;
 				this.fixed = data.fixed;
 				this.type = data.type;
-				this.content = data.content ? data.content : '# 服务条款及隐私政策';
-			})
-		}
-	};
+				this.content = data.content ? data.content : "# 服务条款及隐私政策";
+			});
+	}
+};
 
-	export default RegisterSetting;
+export default RegisterSetting;
 </script>

@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,6 +21,7 @@ declare(strict_types=1);
 namespace Zhiyi\Plus\Http\Controllers\APIs\V2;
 
 use Illuminate\Http\Request;
+use Zhiyi\Plus\Models\UserCount;
 use Illuminate\Contracts\Routing\ResponseFactory as ContractResponse;
 
 // use Illuminate\Notifications\DatabaseNotification as NotificationModel;
@@ -83,7 +84,7 @@ class UserNotificationController extends Controller
             ->first(['id', 'read_at', 'data', 'created_at']);
 
         if (! $notification) {
-            return $response->json(['message' => ['通知不存在或者已被删除']])->setStatusCode(404);
+            return $response->json(['message' => '通知不存在或者已被删除'])->setStatusCode(404);
         }
 
         $notification->markAsRead();
@@ -108,8 +109,16 @@ class UserNotificationController extends Controller
         ));
 
         $request->user()->unreadNotifications()->whereIn('id', $notifications)->get()->markAsRead();
+        // 清空用户未读系统通知未读数
+        $userCount = UserCount::firstOrNew([
+            'user_id' => $request->user()->id,
+            'type' => 'user-system',
+        ]);
 
-        return $response->json(['message' => ['操作成功']])->setStatusCode(201);
+        $userCount->total -= 1;
+        $userCount->save();
+
+        return $response->json(['message' => '操作成功'])->setStatusCode(201);
     }
 
     /**
@@ -122,7 +131,15 @@ class UserNotificationController extends Controller
     public function markAllAsRead(Request $request)
     {
         $request->user()->unreadNotifications()->where('read_at', null)->get()->markAsRead();
+        // 清空用户未读系统通知未读数
+        $userCount = UserCount::firstOrNew([
+            'user_id' => $request->user()->id,
+            'type' => 'user-system',
+        ]);
 
-        return response()->json(['message' => ['操作成功']])->setStatusCode(201);
+        $userCount->total = 0;
+        $userCount->save();
+
+        return response()->json(['message' => '操作成功'])->setStatusCode(201);
     }
 }

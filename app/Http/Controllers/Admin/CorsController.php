@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -36,7 +36,7 @@ class CorsController
     public function fetch(): JsonResponse
     {
         return response()->json([
-            'credentiails' => (bool) config('cors.allow-credentiails'),
+            'credentials' => (bool) config('cors.allow-credentials'),
             'allowHeaders' => (array) config('cors.allow-headers'),
             'exposeHeaders' => (array) config('cors.expose-headers'),
             'origins' => (array) config('cors.origins'),
@@ -48,7 +48,7 @@ class CorsController
     public function update(UpdateCorsRequest $request, Configuration $config): Response
     {
         $config->set([
-            'cors.allow-credentiails' => (bool) $request->input('credentiails'),
+            'cors.allow-credentials' => (bool) $request->input('credentials'),
             'cors.allow-headers' => $request->input('allowHeaders'),
             'cors.expose-headers' => $request->input('exposeHeaders'),
             'cors.origins' => $request->input('origins'),

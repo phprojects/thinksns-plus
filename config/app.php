@@ -4,12 +4,12 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -38,7 +38,7 @@ return [
     |
     | This value determines the "environment" your application is currently
     | running in. This may determine how you prefer to configure various
-    | services your application utilizes. Set this in your ".env" file.
+    | services the application utilizes. Set this in your ".env" file.
     |
     */
 
@@ -69,6 +69,8 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+
+    'asset_url' => env('ASSET_URL', null),
 
     /*
     |--------------------------------------------------------------------------
@@ -111,6 +113,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Faker Locale
+    |--------------------------------------------------------------------------
+    |
+    | This locale will be used by the Faker PHP library when generating fake
+    | data for your database seeds. For example, this will be used to get
+    | localized telephone numbers, street address information and more.
+    |
+    */
+
+    'faker_locale' => 'en_US',
+
+    /*
+    |--------------------------------------------------------------------------
     | Encryption Key
     |--------------------------------------------------------------------------
     |
@@ -122,7 +137,14 @@ return [
 
     'key' => env('APP_KEY'),
 
-    'cipher' => 'AES-256-CBC',
+    'cipher'     => 'AES-256-CBC',
+
+    /*
+     |
+     | 每页数据条数
+     |
+     */
+    'data_limit' => abs(env('DATA_LIMIT')) ? abs(env('DATA_LIMIT')) : 15,
 
     /*
     |--------------------------------------------------------------------------
@@ -164,19 +186,18 @@ return [
         Illuminate\View\ViewServiceProvider::class,
 
         /*
-         * Package Service Providers...
-         */
-        Intervention\Image\ImageServiceProvider::class,
-
-        /*
          * Application Service Providers...
          */
         Zhiyi\Plus\Providers\AppServiceProvider::class,
         Zhiyi\Plus\Providers\AuthServiceProvider::class,
         // Zhiyi\Plus\Providers\BroadcastServiceProvider::class,
         Zhiyi\Plus\Providers\EventServiceProvider::class,
+        Zhiyi\Plus\Providers\TelescopeServiceProvider::class,
         Zhiyi\Plus\Providers\RouteServiceProvider::class,
         Zhiyi\Plus\Providers\NotificationServiceProvider::class,
+        Zhiyi\Plus\Providers\EloquentServiceProvider::class,
+        Zhiyi\Plus\FileStorage\Providers\AppServiceProvider::class,
+        Mavinoo\LaravelBatch\LaravelBatchServiceProvider::class,
 
     ],
 
@@ -192,7 +213,9 @@ return [
     */
 
     'aliases' => [
+
         'App'          => Illuminate\Support\Facades\App::class,
+        'Arr'          => Illuminate\Support\Arr::class,
         'Artisan'      => Illuminate\Support\Facades\Artisan::class,
         'Auth'         => Illuminate\Support\Facades\Auth::class,
         'Blade'        => Illuminate\Support\Facades\Blade::class,
@@ -226,6 +249,7 @@ return [
         'Validator'    => Illuminate\Support\Facades\Validator::class,
         'View'         => Illuminate\Support\Facades\View::class,
         'Image'        => Intervention\Image\Facades\Image::class,
+        'Batch'        => Mavinoo\LaravelBatch\LaravelBatchFacade::class,
     ],
 
 ];

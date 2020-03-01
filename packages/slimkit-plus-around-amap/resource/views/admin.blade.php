@@ -43,7 +43,7 @@
         <div class="panel panel-default">
             <div class="panel-heading">设置高德地图信息</div>
             <div class="panel-body">
-                <form class="form-horizontal" method="POST" action="{{ route('around-amap:admin-save') }}">
+                <form class="form-horizontal" method="POST" action="{{ route('around-amap:admin-home') }}">
                     {{ csrf_field() }}
 
                     <div class="form-group{{ $errors->has('amap-key') ? ' has-error' : '' }}">
@@ -87,21 +87,6 @@
                             @endif
                         </div>
                     </div>
-
-                    <div class="form-group{{ $errors->has('amap-jssdk') ? ' has-error' : '' }}">
-                        <label for="name" class="col-md-4 control-label">JS SDK 链接</label>
-
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" name="amap-jssdk" value="{{ old('amap-jssdk', $jssdk) }}" required>
-
-                            @if ($errors->has('amap-jssdk'))
-                                <span class="help-block">
-                                    <strong>{{ $errors->first('amap-jssdk') }}</strong>
-                                </span>
-                            @endif
-                        </div>
-                    </div>
-
                     <div class="form-group">
                         <div class="col-md-6 col-md-offset-4">
                             <button type="submit" class="btn btn-primary">

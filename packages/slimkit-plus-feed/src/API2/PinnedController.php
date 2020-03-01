@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,6 +21,7 @@ declare(strict_types=1);
 namespace Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\API2;
 
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Zhiyi\Plus\Http\Controllers\Controller;
 use Zhiyi\Plus\Models\Comment as CommentModel;
@@ -65,11 +66,11 @@ class PinnedController extends Controller
     {
         $user = $request->user();
         if ($comment->user_id !== $user->id) {
-            return $response->json(['message' => ['你没有权限申请']])->setStatusCode(403);
+            return $response->json(['message' => '你没有权限申请'])->setStatusCode(403);
         } elseif ($feed->pinnedComments()->newPivotStatementForId($comment->id)->where(function ($query) use ($datetime) {
             return $query->where('expires_at', '>', $datetime)->orwhere('expires_at', null);
         })->first()) {
-            return $response->json(['message' => ['已经申请过']])->setStatusCode(422);
+            return $response->json(['message' => '已申请过置顶, 请等待审核'])->setStatusCode(422);
         }
 
         $pinned = new FeedPinnedModel();
@@ -94,23 +95,30 @@ class PinnedController extends Controller
                 return $this->app->call([$this, 'save'], [
                     'charge' => $charge,
                     'pinned' => $pinned,
+                    'feed' => $feed,
                     'call' => $feed->user ? function () use ($user, $comment, $feed, $pinned) {
-                        $message = sprintf('%s 在你发布的动态中申请评论置顶', $user->name);
+                        // $message = sprintf('%s 在你发布的动态中申请评论置顶', $user->name);
                         // 增加动态评论置顶申请未读数
+                        $userUnReadCount = $pinned->newQuery()
+                            ->where('target_user', $feed->user_id)
+                            ->where('channel', 'comment')
+                            ->whereNull('expires_at')
+                            ->count();
+
                         $userCount = UserCountModel::firstOrNew([
                             'user_id' => $feed->user->id,
                             'type' => 'user-feed-comment-pinned',
                         ]);
 
-                        $userCount->total += 1;
+                        $userCount->total = $userUnReadCount;
                         $userCount->save();
 
-                        $feed->user->sendNotifyMessage('feed:pinned-comment', $message, [
-                            'feed' => $feed,
-                            'user' => $user,
-                            'comment' => $comment,
-                            'pinned' => $pinned,
-                        ]);
+                        // $feed->user->sendNotifyMessage('feed:pinned-comment', $message, [
+                        //     'feed' => $feed,
+                        //     'user' => $user,
+                        //     'comment' => $comment,
+                        //     'pinned' => $pinned,
+                        // ]);
                     } : null,
                 ]);
             },
@@ -131,11 +139,11 @@ class PinnedController extends Controller
         $user = $request->user();
 
         if ($feed->user_id !== $user->id) {
-            return $response->json(['message' => ['你没有权限申请']])->setStatusCode(403);
+            return $response->json(['message' => '你没有权限申请'])->setStatusCode(403);
         } elseif ($feed->pinned()->where('user_id', $user->id)->where(function ($query) use ($datetime) {
             return $query->where('expires_at', '>', $datetime)->orwhere('expires_at', null);
         })->first()) {
-            return $response->json(['message' => ['已经申请过']])->setStatusCode(422);
+            return $response->json(['message' => '已经申请过动态置顶, 请等待审核'])->setStatusCode(422);
         }
 
         $pinned = new FeedPinnedModel();
@@ -152,7 +160,7 @@ class PinnedController extends Controller
                 $charge->action = 0;
                 $charge->amount = $pinned->amount;
                 $charge->subject = '动态申请置顶';
-                $charge->body = sprintf('申请置顶动态《%s》', str_limit($feed->feed_content, 100));
+                $charge->body = sprintf('申请置顶动态《%s》', Str::limit($feed->feed_content, 100));
                 $charge->status = 1;
 
                 return $this->app->call([$this, 'save'], [
@@ -178,10 +186,18 @@ class PinnedController extends Controller
         ResponseContract $response,
         WalletChargeModel $charge,
         FeedPinnedModel $pinned,
+        FeedModel $feed,
         callable $call = null
     ) {
         $user = $request->user();
-        $user->getConnection()->transaction(function () use ($user, $charge, $pinned) {
+        $user->getConnection()->transaction(function () use ($user, $charge, $pinned, $feed) {
+            if ($feed->user_id === $user->id) {
+                $dateTime = new Carbon();
+                $pinned->expires_at = $dateTime->addDay($pinned->day);
+                $pinned->save();
+
+                return $response->json(['message' => '置顶成功'], 201);
+            }
             $user->wallet()->decrement('balance', $charge->amount);
             $user->walletCharges()->save($charge);
             $pinned->save();
@@ -191,7 +207,7 @@ class PinnedController extends Controller
             call_user_func($call);
         }
 
-        return $response->json(['message' => ['申请成功']])->setStatusCode(201);
+        return $response->json(['message' => '提交成功, 等待审核'])->setStatusCode(201);
     }
 
     /**
@@ -210,7 +226,7 @@ class PinnedController extends Controller
             'amount' => [
                 'required',
                 'integer',
-                'min:1',
+                'min:0',
                 'max:'.$user->wallet->balance,
             ],
             'day' => [

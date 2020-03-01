@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -23,8 +23,7 @@ namespace Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\AdminControllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Zhiyi\Plus\Models\Comment;
-use Zhiyi\Plus\Support\Configuration;
-use Zhiyi\Plus\Repository\WalletRatio;
+use function Zhiyi\Plus\setting;
 use Zhiyi\Plus\Http\Controllers\Controller;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\Feed;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\FeedPinned;
@@ -37,12 +36,12 @@ class HomeController extends Controller
      * @return mixed
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function show(WalletRatio $walletRatioRepository)
+    public function show()
     {
         return view('feed:view::admin', [
             'base_url' => route('feed:admin'),
             'csrf_token' => csrf_token(),
-            'wallet_ratio' => $walletRatioRepository->get(),
+            'wallet_ratio' => setting('wallet', 'ratio', 100),
         ]);
     }
 
@@ -125,12 +124,6 @@ class HomeController extends Controller
             return $feed->paidNode->amount;
         })->sum();
 
-        // 付费总人数
-        // TODO 同上
-
-        $status = [];
-        $status = config('feed');
-
         return response()->json([
             'feedsCount' => $feedsCount,
             'commentsCount' => $commentsCount,
@@ -138,22 +131,10 @@ class HomeController extends Controller
             'payCount' => $payCount,
             'topFeed' => $feedPinnedCount,
             'topComment' => $commentPinnedCount,
-            'status' => $status,
+            'status' => [
+                'reward' => setting('feed', 'reward-switch'),
+            ],
         ])->setStatusCode(200);
-    }
-
-    /**
-     * 关闭应用.
-     * @param  Request $request [description]
-     * @return [type]           [description]
-     */
-    public function handleComponentStatus(Request $request, Configuration $configuration)
-    {
-        $open = $request->input('open');
-
-        $configuration->set('feed.open', $open);
-
-        return response()->json(['message' => '设置成功'])->setStatusCode(201);
     }
 
     /**
@@ -161,11 +142,9 @@ class HomeController extends Controller
      * @param  Request $request [description]
      * @return [type]           [description]
      */
-    public function handleRewardStatus(Request $request, Configuration $configuration)
+    public function handleRewardStatus(Request $request)
     {
-        $reward = $request->input('reward');
-
-        $configuration->set('feed.reward', $reward);
+        setting('feed')->set('reward-switch', (bool) $request->input('reward'));
 
         return response()->json(['message' => '设置成功'])->setStatusCode(201);
     }

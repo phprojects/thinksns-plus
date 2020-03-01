@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -200,6 +200,20 @@ class SmsController extends Controller
         return response()->json(['message' => ['更新成功']], 201);
     }
 
+    public function updateHuyiOption(Configuration $store, Request $request)
+    {
+        $config = $store->getConfiguration();
+
+        $config->set(
+            'sms.gateways.huyi',
+            $request->only(['api_key', 'api_id', 'content'])
+        );
+
+        $store->save($config);
+
+        return response()->json(['message' => ['更新成功']], 201);
+    }
+
     /**
      * Get SMS driver Template configuration information.
      *
@@ -213,6 +227,7 @@ class SmsController extends Controller
         $data['alidayu_template_id'] = $config->get('sms.channels.code.alidayu.template');
         $data['aliyun_template_id'] = $config->get('sms.channels.code.aliyun.template');
         $data['yunpian_template_content'] = $config->get('sms.channels.code.yunpian.content');
+        $data['huyi_template_content'] = $config->get('sms.channels.code.huyi.content');
 
         return response()->json($data, 200);
     }
@@ -242,6 +257,11 @@ class SmsController extends Controller
         $config->set(
             'sms.channels.code.yunpian.content',
             $request->input('yunpian_template_content')
+        );
+
+        $config->set(
+            'sms.channels.code.huyi.content',
+            $request->input('huyi_template_content')
         );
 
         $store->save($config);

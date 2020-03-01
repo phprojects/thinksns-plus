@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,6 +21,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\Feed as FeedModel;
 
 class CreateFeedsTable extends Migration
 {
@@ -46,11 +47,21 @@ class CreateFeedsTable extends Migration
             $table->tinyInteger('audit_status')->nullable()->default(1)->comment('审核状态 0-未审核 1-已审核 2-未通过');
             $table->bigInteger('feed_mark')->comment('唯一标记');
 
+            // 可转发的
+            $table->string('repostable_type')->nullable()->default(null)->comment('可转发的资源类型');
+            $table->integer('repostable_id')->unsigned()->nullable()->default(0)->comment('可转发的资源 ID');
+
+            // 用于热门动态需求
+            $table->integer('hot')->unsigned()->nullable()->default(0)->comment('热门排序值');
+
             $table->timestamps();
             $table->softDeletes();
 
             $table->index('user_id');
             $table->unique('feed_mark');
+            $table->index('hot');
+            $table->index(FeedModel::CREATED_AT);
+            $table->index('deleted_at');
         });
     }
 

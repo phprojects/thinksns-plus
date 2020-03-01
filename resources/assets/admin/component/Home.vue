@@ -30,8 +30,10 @@ $lefyNavWidth: 240px;
     }
   }
   .context-container {
-    width: 100%;
-    padding-left: $lefyNavWidth;
+    width: calc(100vw - #{$lefyNavWidth});
+    margin-left: $lefyNavWidth;
+    height: 100vh;
+    border: none;
   }
 }
 </style>
@@ -41,7 +43,7 @@ $lefyNavWidth: 240px;
     <div class="left-nav pull-left">
 
       <!-- User avatar. -->
-      <img v-if="user.avatar" class="img-responsive img-circle center-block user-avatar" :src="user.avatar">
+      <img v-if="user.avatar" class="img-responsive img-circle center-block user-avatar" :src="user.avatar.url">
       <default-avatar v-else class="img-responsive img-circle center-block user-avatar" />
       <!-- End user avatar. -->
 

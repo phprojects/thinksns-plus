@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -21,13 +21,20 @@ declare(strict_types=1);
 namespace Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\AdminControllers;
 
 use DB;
+use Exception;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 use Zhiyi\Plus\Models\User;
 use Illuminate\Http\Request;
 use Zhiyi\Plus\Models\Comment;
+use Zhiyi\Plus\Models\UserCount;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Eloquent\Builder;
 use Zhiyi\Plus\Http\Controllers\Controller;
+use Zhiyi\Plus\Notifications\System as SystemNotification;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\Feed;
+use Zhiyi\Plus\Packages\Currency\Processes\User as UserProcess;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Models\FeedPinned;
 use Zhiyi\Component\ZhiyiPlus\PlusComponentFeed\Traits\PaginatorPage;
 
@@ -38,7 +45,11 @@ class CommentController extends Controller
     /**
      * 获取评论列表.
      *
-     * @param \Illuminate\Http\Request $request
+     * @param Request $request
+     * @param Comment $commentModel
+     * @param Carbon $datetime
+     * @param FeedPinned $feedPinned
+     * @param User $user
      * @return mixed
      * @author Seven Du <shiweidu@outlook.com>
      */
@@ -189,24 +200,54 @@ class CommentController extends Controller
      *
      * @param Comment $comment
      * @return mixed
+     * @throws Exception
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function delete(Comment $comment)
     {
         DB::beginTransaction();
         try {
+            $pinnedComment = FeedPinned::query()->whereNull('expires_at')
+                ->where('target', $comment->id)
+                ->where('channel', 'comment')
+                ->first();
+            if ($pinnedComment) {
+                $process = new UserProcess();
+                $process->reject(0, $pinnedComment->amount, $pinnedComment->user_id, '评论申请置顶退款', '退还在动态申请置顶的评论的款项');
+                $pinnedComment->delete();
+            }
+            // 统计被评论用户未操作的动态评论置顶
+            $unReadCount = FeedPinned::query()->whereNull('expires_at')
+                ->where('channel', 'comment')
+                ->where('target_user', $comment->target_user)
+                ->count();
+            $userCount = UserCount::query()->firstOrNew([
+                'type' => 'user-feed-comment-pinned',
+                'user_id' => $comment->target_user,
+            ]);
+
+            $userCount->total = $unReadCount;
+            $userCount->save();
+
             $feed = new Feed();
             $feed->where('id', $comment->commentable_id)->decrement('feed_comment_count'); // 统计相关动态评论数量
 
-            // TODO 用户评论统计，积分减少
-
+            // 通知用户评论被删除
+            $comment->user->notify(new SystemNotification('动态评论被管理员删除', [
+                'type' => 'delete:feed/comment',
+                'comment' => [
+                    'contents' => $comment->body,
+                ],
+                'feed' => [
+                    'id' => $comment->commentable_id,
+                    'type' => $comment->commentable_type,
+                ],
+            ]));
             $comment->delete();
         } catch (QueryException $e) {
             DB::rollBack();
 
-            return response()->json([
-                'message' => $e->formatMessage(),
-            ])->setStatusCode(500);
+            throw $e;
         }
         DB::commit();
 
@@ -215,10 +256,10 @@ class CommentController extends Controller
 
     /**
      * 同意评论置顶申请.
-     * @param  Request    $request  [description]
-     * @param  FeedPinned $pinned   [description]
-     * @param  Carbon     $datetime [description]
-     * @return [type]               [description]
+     * @param Comment $comment
+     * @param FeedPinned $pinned [description]
+     * @param Carbon $datetime [description]
+     * @return JsonResponse [type]               [description]
      */
     public function accept(Comment $comment, FeedPinned $pinned, Carbon $datetime)
     {
@@ -229,7 +270,7 @@ class CommentController extends Controller
 
         $pinned->user->sendNotifyMessage(
             'feed-comment:pass',
-            sprintf('你的评论《%s》已被管理员设置为置顶', str_limit($pinned->comment->body, 100)
+            sprintf('你的评论《%s》已被管理员设置为置顶', Str::limit($pinned->comment->body, 100)
         ),
         [
             'comment' => $comment,
@@ -260,7 +301,7 @@ class CommentController extends Controller
             $pinned->expires_at = $datetime->toDateTimeString();
 
             $pinned->save();
-            $pinned->user->sendNotifyMessage('feed-comment:pass', sprintf('你的评论《%s》已被管理员设置为置顶', str_limit($pinned->comment->body, 100)), [
+            $pinned->user->sendNotifyMessage('feed-comment:pass', sprintf('你的评论《%s》已被管理员设置为置顶', Str::limit($pinned->comment->body, 100)), [
                 'comment' => $comment,
                 'pinned' => $pinned,
             ]);
@@ -274,7 +315,7 @@ class CommentController extends Controller
             $pinnedNode->user_id = $comment->user_id;
             $pinnedNode->save();
 
-            $pinnedNode->user->sendNotifyMessage('feed-comment:pass', sprintf('你的评论《%s》已被管理员设置为置顶', str_limit($pinnedNode->comment->body, 100)), [
+            $pinnedNode->user->sendNotifyMessage('feed-comment:pass', sprintf('你的评论《%s》已被管理员设置为置顶', Str::limit($pinnedNode->comment->body, 100)), [
                 'comment' => $comment,
                 'pinned' => $pinnedNode,
             ]);
@@ -285,7 +326,9 @@ class CommentController extends Controller
 
     /**
      * 驳回评论置顶.
-     * @param  FeedPinned $pinned
+     * @param FeedPinned $pinned
+     * @return JsonResponse
+     * @throws Exception
      */
     public function reject(FeedPinned $pinned)
     {

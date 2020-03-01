@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Http\Controllers\APIs\V2;
 
+use Illuminate\Support\Arr;
 use Illuminate\Http\Request;
 use Zhiyi\Plus\Models\User as UserModel;
 use Zhiyi\Plus\Models\Taggable as TaggableModel;
@@ -53,8 +54,10 @@ class FindUserController extends Controller
             ->select('user_id')
             ->with([
                 'user',
+                'user.extra',
             ])
             ->orderBy('followers_count', 'desc')
+            ->orderBy('updated_at', 'desc')
             ->get();
 
         return $response->json(
@@ -82,6 +85,7 @@ class FindUserController extends Controller
         $users = $user->when($offset, function ($query) use ($offset) {
             return $query->offset($offset);
         })
+            ->with('extra')
             ->latest()
             ->limit($limit)
             ->get();
@@ -114,7 +118,7 @@ class FindUserController extends Controller
         ->whereExists(function ($query) {
             return $query->from('users')->whereRaw('users.id = users_recommended.user_id')->where('deleted_at', null);
         })
-        ->with(['user'])
+        ->with(['user', 'user.extra'])
         ->limit($limit)
         ->orderBy('id', 'desc')
         ->get();
@@ -147,7 +151,7 @@ class FindUserController extends Controller
             $users = $userRecommended->when($offset, function ($query) use ($offset) {
                 return $query->offset($offset);
             })
-                ->with(['user'])
+                ->with(['user', 'user.extra'])
                 ->limit($limit)
                 ->orderBy('id', 'desc')
                 ->get();
@@ -169,7 +173,7 @@ class FindUserController extends Controller
             ->when($offset, function ($query) use ($offset) {
                 return $query->offset($offset);
             })
-            ->with('tags')
+            ->with(['tags', 'extra'])
             ->limit($limit)
             ->orderBy('id', 'desc')
             ->get();
@@ -201,11 +205,11 @@ class FindUserController extends Controller
         $offset = $request->input('offset', 0);
         // $recommends = $users = [];
 
-        $tags = $u->tags()->select('tag_id')->get();
-        $tags = array_pluck($tags, 'tag_id');
+        $tags = $currentUser->tags()->select('tag_id')->get();
+        $tags = Arr::pluck($tags, 'tag_id');
         // 根据用户标签获取用户
         $users = $taggable->whereIn('tag_id', $tags)
-            ->where('taggable_id', '<>', $u)
+            ->where('taggable_id', '<>', $currentUser->id)
             ->where('taggable_type', 'users')
             ->whereExists(function ($query) {
                 return $query->from('users')->whereRaw('users.id = taggables.taggable_id')->where('deleted_at', null);
@@ -213,7 +217,7 @@ class FindUserController extends Controller
             ->when($offset, function ($query) use ($offset) {
                 return $query->offset($offset);
             })
-            ->with('user')
+            ->with(['user', 'user.extra'])
             ->limit($limit)
             ->select('taggable_id')
             ->groupBy('taggable_id')
@@ -221,8 +225,8 @@ class FindUserController extends Controller
 
         return $response->json(
             $users->map(function ($user) use ($currentUser) {
-                $user->user->following = $user->user->hasFollwing($currentUser);
-                $user->user->follower = $user->user->hasFollower($currentUser);
+                $user->user->following = $user->user->hasFollwing($currentUser->id);
+                $user->user->follower = $user->user->hasFollower($currentUser->id);
                 $user->user->blacked = $currentUser->blacked($user->user);
 
                 return $user->user;
@@ -248,6 +252,7 @@ class FindUserController extends Controller
         }
 
         $users = $userModel
+            ->with('extra')
             ->select('*')
             ->whereIn('phone', $phones)
             ->limit(100)

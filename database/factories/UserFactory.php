@@ -4,18 +4,21 @@
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
  * +----------------------------------------------------------------------+
  */
 
+/** @var \Illuminate\Database\Eloquent\Factory $factory */
+use Illuminate\Support\Str;
+use Zhiyi\Plus\Models\User;
 use Faker\Generator as Faker;
 
 /*
@@ -29,14 +32,17 @@ use Faker\Generator as Faker;
 |
 */
 
-$factory->define(Zhiyi\Plus\Models\User::class, function (Faker $faker) {
+$factory->define(User::class, function (Faker $faker) {
     static $password;
 
     return [
         'name' => $faker->name,
         'email' => $faker->unique()->safeEmail,
         'phone' => $faker->unique()->phoneNumber,
-        'password' => $password ?: $password = bcrypt('secret'),
-        'remember_token' => str_random(10),
+        'password' => $password ?: $password = bcrypt('password'),
+        'email_verified_at' => now(),
+        'phone_verified_at' => now(),
+        // password
+        'remember_token'    => Str::random(10),
     ];
 });

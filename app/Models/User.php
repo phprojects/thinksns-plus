@@ -6,12 +6,12 @@ declare(strict_types=1);
  * +----------------------------------------------------------------------+
  * |                          ThinkSNS Plus                               |
  * +----------------------------------------------------------------------+
- * | Copyright (c) 2017 Chengdu ZhiYiChuangXiang Technology Co., Ltd.     |
+ * | Copyright (c) 2016-Present ZhiYiChuangXiang Technology Co., Ltd.     |
  * +----------------------------------------------------------------------+
- * | This source file is subject to version 2.0 of the Apache license,    |
- * | that is bundled with this package in the file LICENSE, and is        |
- * | available through the world-wide-web at the following url:           |
- * | http://www.apache.org/licenses/LICENSE-2.0.html                      |
+ * | This source file is subject to enterprise private license, that is   |
+ * | bundled with this package in the file LICENSE, and is available      |
+ * | through the world-wide-web at the following url:                     |
+ * | https://github.com/slimkit/plus/blob/master/LICENSE                  |
  * +----------------------------------------------------------------------+
  * | Author: Slim Kit Group <master@zhiyicx.com>                          |
  * | Homepage: www.thinksns.com                                           |
@@ -20,27 +20,30 @@ declare(strict_types=1);
 
 namespace Zhiyi\Plus\Models;
 
+use Cache;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Builder;
+use Medz\Laravel\Notifications\JPush\Sender;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Zhiyi\Plus\FileStorage\FileMetaInterface;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Zhiyi\Plus\Models\Relations\UserHasWalletCash;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Zhiyi\Plus\Http\Controllers\APIs\V2\UserAvatarController;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Zhiyi\Plus\FileStorage\Traits\EloquentAttributeTrait as FileStorageEloquentAttributeTrait;
 
 class User extends Authenticatable implements JWTSubject
 {
     // 功能性辅助相关。
     use Notifiable,
         SoftDeletes,
-        Concerns\HasAvatar,
         Concerns\UserHasAbility,
         Concerns\UserHasNotifiable,
         Concerns\Macroable;
     // 关系数据相关
-    use Relations\UserHasWallet,
-        Relations\UserHasWalletCash,
-        Relations\UserHasWalletCharge,
-        Relations\UserHasFilesWith,
+    use Relations\UserHasFilesWith,
         Relations\UserHasFollow,
         Relations\UserHasComment,
         Relations\UserHasReward,
@@ -48,39 +51,62 @@ class User extends Authenticatable implements JWTSubject
         Relations\UserHasLike,
         Relations\UserHasCurrency,
         Relations\UserHasNewWallet,
-        Relations\UserHasBlackLists;
-
+        Relations\UserHasBlackList,
+        UserHasWalletCash;
+    use FileStorageEloquentAttributeTrait;
     /**
      * The attributes that are mass assignable.
      *
      * @var array
      */
-    protected $fillable = [
-        'name', 'email', 'phone', 'password',
-    ];
-
+    protected $fillable
+        = [
+            'name', 'email', 'phone', 'password', 'last_login_ip',
+            'register_ip',
+        ];
     /**
      * The attributes that should be hidden for arrays.
      *
      * @var array
      */
-    protected $hidden = [
-        'password', 'remember_token', 'phone', 'email', 'pivot',
-    ];
-
+    protected $hidden
+        = [
+            'password', 'remember_token', 'phone', 'email', 'pivot',
+        ];
     /**
      * The accessors to append to the model's array form.
      *
      * @var array
      */
-    protected $appends = ['avatar', 'bg', 'verified'];
+    protected $appends = ['verified'];
 
     /**
      * The relations to eager load on every query.
      *
      * @var array
      */
-    protected $with = ['extra'];
+    public static function boot()
+    {
+        parent::boot();
+        static::addGlobalScope('certification', function (Builder $query) {
+            $query->with('certification');
+        });
+    }
+
+    /**
+     * Get Notification for JPush sender.
+     *
+     * @return Sender
+     */
+    protected function routeNotificationForJpush()
+    {
+        return new Sender([
+            'platform' => 'all',
+            'audience' => [
+                'alias' => sprintf('user_%d', $this->id),
+            ],
+        ]);
+    }
 
     /**
      * Get the identifier that will be stored in the subject claim of the JWT.
@@ -104,41 +130,24 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
-    /**
-     * Get avatar key.
-     *
-     * @return int
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    public function getAvatarKey()
+    protected function getAvatarAttribute(?string $resource)
+    : ?FileMetaInterface
     {
-        return $this->getKey();
-    }
-
-    /**
-     * Get avatar attribute.
-     *
-     * @return string|null
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    public function getAvatarAttribute()
-    {
-        if (! $this->avatarPath()) {
+        if (! $resource) {
             return null;
         }
 
-        return action('\\'.UserAvatarController::class.'@show', ['user' => $this]);
+        return $this->getFileStorageResourceMeta($resource);
     }
 
-    /**
-     * Get user background image.
-     *
-     * @return string|null
-     * @author Seven Du <shiweidu@outlook.com>
-     */
-    public function getBgAttribute()
+    protected function getBgAttribute(?string $resource)
+    : ?FileMetaInterface
     {
-        return $this->avatar(0, 'user-bg');
+        if (! $resource) {
+            return null;
+        }
+
+        return $this->getFileStorageResourceMeta($resource);
     }
 
     /**
@@ -147,27 +156,27 @@ class User extends Authenticatable implements JWTSubject
      * @return array|null
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function getVerifiedAttribute()
+    protected function getVerifiedAttribute()
     {
-        $certification = $this->certification()
-            ->where('status', 1)
-            ->first();
+        $certification = Cache::rememberForever(sprintf('cache_for_certification_of_%d', $this->id), function () {
+            return $this->getRelation('certification') ?? false;
+        });
 
-        if (! $certification) {
+        if (! $certification || $certification->status !== 1) {
             return null;
         }
 
         return [
-            'type' => $certification->certification_name,
-            'icon' => $certification->icon,
-            'description' => $certification->data['desc'],
+            'type'        => $certification->certification_name,
+            'icon'        => $certification->icon,
+            'description' => $certification->data['desc'] ?? '',
         ];
     }
 
     /**
      * Has user extra.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     * @return HasOne
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function extra()
@@ -178,7 +187,7 @@ class User extends Authenticatable implements JWTSubject
     /**
      * Has user certification.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     * @return HasOne
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function certification()
@@ -189,7 +198,7 @@ class User extends Authenticatable implements JWTSubject
     /**
      * Has tags of the user.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\MorphToMany
+     * @return MorphToMany
      * @author Seven Du <shiweidu@outlook.com>
      */
     public function tags()
@@ -200,6 +209,7 @@ class User extends Authenticatable implements JWTSubject
 
     /**
      * 是否被后台推荐.
+     *
      * @return [type] [description]
      */
     public function recommended()
@@ -209,6 +219,7 @@ class User extends Authenticatable implements JWTSubject
 
     /**
      * 后台设置被注册者关注，或者是双向关注.
+     *
      * @return [type] [description]
      */
     public function famous()
@@ -219,15 +230,16 @@ class User extends Authenticatable implements JWTSubject
     /**
      * 复用设置手机号查询条件方法.
      *
-     * @param Illuminate\Database\Eloquent\Builder $query 查询对象
-     * @param string  $phone 手机号码
+     * @param  Illuminate\Database\Eloquent\Builder  $query  查询对象
+     * @param  string  $phone  手机号码
      *
      * @return Illuminate\Database\Eloquent\Builder 查询对象
      *
      * @author Seven Du <shiweidu@outlook.com>
      * @homepage http://medz.cn
      */
-    public function scopeByPhone(Builder $query, string $phone): Builder
+    public function scopeByPhone(Builder $query, string $phone)
+    : Builder
     {
         return $query->where('phone', $phone);
     }
@@ -235,15 +247,16 @@ class User extends Authenticatable implements JWTSubject
     /**
      * 复用设置用户名查询条件方法.
      *
-     * @param Illuminate\Database\Eloquent\Builder $query 查询对象
-     * @param string  $name  用户名
+     * @param  Illuminate\Database\Eloquent\Builder  $query  查询对象
+     * @param  string  $name  用户名
      *
      * @return Illuminate\Database\Eloquent\Builder 查询对象
      *
      * @author Seven Du <shiweidu@outlook.com>
      * @homepage http://medz.cn
      */
-    public function scopeByName(Builder $query, string $name): Builder
+    public function scopeByName(Builder $query, string $name)
+    : Builder
     {
         return $query->where('name', $name);
     }
@@ -251,12 +264,14 @@ class User extends Authenticatable implements JWTSubject
     /**
      * 复用 E-Mail 查询条件方法.
      *
-     * @param Illuminate\Database\Eloquent\Builder $query
-     * @param string $email [description]
+     * @param  Illuminate\Database\Eloquent\Builder  $query
+     * @param  string  $email  [description]
+     *
      * @return Illuminate\Database\Eloquent\Builder
      * @author Seven Du <shiweidu@outlook.com>
      */
-    public function scopeByEmail(Builder $query, string $email): Builder
+    public function scopeByEmail(Builder $query, string $email)
+    : Builder
     {
         return $query->where('email', $email);
     }
@@ -264,14 +279,15 @@ class User extends Authenticatable implements JWTSubject
     /**
      * Create user ppassword.
      *
-     * @param string $password user password
+     * @param  string  $password  user password
      *
      * @return self
      *
      * @author Seven Du <shiweidu@outlook.com>
      * @homepage http://medz.cn
      */
-    public function createPassword(string $password): self
+    public function createPassword(string $password)
+    : self
     {
         $this->password = app('hash')->make($password);
 
@@ -284,13 +300,15 @@ class User extends Authenticatable implements JWTSubject
      * @Author   Wayne[qiaobin@zhiyicx.com]
      * @DateTime 2016-12-30T18:44:40+0800
      *
-     * @param string $password [description]
+     * @param  string  $password  [description]
      *
      * @return bool 验证结果true or false
      */
-    public function verifyPassword(string $password): bool
+    public function verifyPassword(string $password)
+    : bool
     {
-        return $this->password && app('hash')->check($password, $this->password);
+        return $this->password
+            && app('hash')->check($password, $this->password);
     }
 
     /**
@@ -318,5 +336,20 @@ class User extends Authenticatable implements JWTSubject
     public function getImPwdHash()
     {
         return $this->password ? md5($this->password) : md5('123456');
+    }
+
+    /**
+     * The user topics belong to many.
+     *
+     * @return BelongsToMany
+     */
+    public function feedTopics()
+    : BelongsToMany
+    {
+        $table = (new FeedTopicUserLink)->getTable();
+
+        return $this
+            ->belongsToMany(FeedTopic::class, $table, 'user_id', 'topic_id')
+            ->using(FeedTopicUserLink::class);
     }
 }
